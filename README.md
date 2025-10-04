@@ -1,0 +1,2 @@
+# Flory
+Automated smart pot.
