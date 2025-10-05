@@ -13,7 +13,7 @@ The Flory API offers a simple HTTP-based interface for **monitoring, configuring
 
 It provides functionality for:
 
-  * Real-time sensor data (**soil moisture**, **tank level**, **temperature**, **humidity**, **battery voltage**).
+  * Real-time sensor data (**soil moisture**, **tank level**, **temperature**, **humidity**, **battery percentage**).
   * **Pump control** (manual trigger/stop).
   * Device configuration (calibration map, timing, intervals).
   * **OTA firmware updates** (via Arduino IDE).
@@ -71,7 +71,7 @@ No authentication is currently required for accessing or controlling the device.
 | **`temperature`** | `float` | Ambient temperature ($\text{°C}$, from DHT sensor). |
 | **`humidity`** | `float` | Relative humidity (%). |
 | **`pump_on`** | `boolean` | Whether the water pump is currently active. |
-| **`battery_v`** | `float` | Battery voltage in volts (V). |
+| **`battery_percent`** | `float` | Battery voltage in percentage. |
 
 **Response Example:**
 
@@ -82,7 +82,7 @@ No authentication is currently required for accessing or controlling the device.
   "temperature": 23.1,
   "humidity": 52.4,
   "pump_on": false,
-  "battery_v": 4.12
+  "battery_percent": 4.12
 }
 ```
 

@@ -8,7 +8,7 @@ type StatusData = {
   temperature: number;
   humidity: number;
   pump_on: boolean;
-  battery_v: number;
+  battery_percent: number;
 };
 
 export default function Home() {
@@ -114,8 +114,8 @@ export default function Home() {
               <span className={`font-mono ${data.pump_on ? "text-pink-400" : "text-gray-400"}`}>{data.pump_on ? "ON" : "OFF"}</span>
             </li>
             <li className="flex justify-between items-center text-lg text-white">
-              <span className="font-semibold">Battery Voltage</span>
-              <span className="font-mono text-purple-400">{typeof data.battery_v === "number" ? data.battery_v + " V" : "N/A"}</span>
+              <span className="font-semibold">Battery Percentage</span>
+              <span className="font-mono text-purple-400">{typeof data.battery_percent === "number" ? data.battery_percent + " %" : "N/A"}</span>
             </li>
           </ul>
         </div>
