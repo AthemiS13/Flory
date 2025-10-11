@@ -1,0 +1,42 @@
+# macOS
+.DS_Store
+.Spotlight-V100
+.Trashes
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Next.js / webapp build outputs
+/webapp/out/
+/webapp/.next/
+/webapp/.next/*
+/webapp/.vercel/
+/webapp/.turbo/
+
+# Tailwind/PostCSS
+/.pnp*
+
+# Build artifacts
+/build/
+/dist/
+
+# Arduino build output and object files
+*.elf
+*.elf.*
+*.bin
+*.hex
+build/
+/.pioenvs/
+
+# Editor directories and files
+.vscode/
+.idea/
+*.swp
+
+# Misc
+.env
+.env.local
+.cache/

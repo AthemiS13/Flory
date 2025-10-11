@@ -159,18 +159,69 @@ bool handleFileRead() {
   if (path == "/") path = "/index.html";
   if (path.endsWith("/")) path += "index.html";
   Serial.printf("Web request for: %s\n", path.c_str());
-  if (!SD.exists(path.c_str())) return false;
-  File file = SD.open(path.c_str());
-  if (!file) return false;
-  String contentType = getContentType(path);
-  server.streamFile(file, contentType.c_str());
-  file.close();
-  return true;
+
+  // Try a few candidate locations on the SD card. Common mistake: user copies
+  // the entire `out` folder to the SD root, resulting in files at /out/index.html
+  const char* candidates[] = { nullptr, "/out" };
+  for (int i = 0; i < 2; ++i) {
+    String candidatePath;
+    if (candidates[i]) candidatePath = String(candidates[i]) + path;
+    else candidatePath = path;
+
+    Serial.printf("  trying: %s\n", candidatePath.c_str());
+    if (!SD.exists(candidatePath.c_str())) continue;
+    File file = SD.open(candidatePath.c_str());
+    if (!file) {
+      Serial.printf("  exists but failed to open: %s\n", candidatePath.c_str());
+      continue;
+    }
+    String contentType = getContentType(candidatePath);
+    Serial.printf("  serving: %s\n", candidatePath.c_str());
+    server.streamFile(file, contentType.c_str());
+    file.close();
+    return true;
+  }
+  return false;
+}
+
+// Debug: list SD root contents as JSON
+void handleSdList() {
+  String path = "/";
+  if (server.hasArg("path")) {
+    path = server.arg("path");
+    // ensure leading slash
+    if (!path.startsWith("/")) path = String("/") + path;
+  }
+  DynamicJsonDocument doc(4096);
+  JsonArray arr = doc.to<JsonArray>();
+  File dir = SD.open(path.c_str());
+  if (!dir) {
+    server.send(500, "application/json", "{\"error\":\"failed to open path\"}");
+    return;
+  }
+  if (!dir.isDirectory()) {
+    server.send(400, "application/json", "{\"error\":\"path is not a directory\"}");
+    dir.close();
+    return;
+  }
+  File file = dir.openNextFile();
+  while (file) {
+    JsonObject o = arr.createNestedObject();
+    o["name"] = String(file.name());
+    o["isDir"] = file.isDirectory();
+    if (!file.isDirectory()) o["size"] = (long)file.size();
+    file = dir.openNextFile();
+  }
+  dir.close();
+  String out;
+  serializeJson(doc, out);
+  server.send(200, "application/json", out);
 }
 
 void startWebRoutes() {
   server.on("/api/status", HTTP_GET, handleStatus);
   server.on("/api/calibration", HTTP_GET, handleCalibrationGet);
+  server.on("/sd/list", HTTP_GET, handleSdList);
   server.on("/api/settings", HTTP_POST, handleSettingsPost);
   server.on("/api/pump", HTTP_POST, handlePumpPost);
   server.on("/api/restart", HTTP_POST, handleRestart);
