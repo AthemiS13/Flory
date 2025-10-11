@@ -1,2 +1,7 @@
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 /* minimal global styles */
-html,body{margin:0;padding:0;background:#f4f6f8;color:#0b1728;font-family:Inter,system-ui,-apple-system,Roboto}
+html,body{margin:0;padding:0;background:#ffffff;color:#0b1728;font-family:Inter,system-ui,-apple-system,Roboto}
