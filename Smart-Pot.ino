@@ -1,6 +1,12 @@
 // Main file: setup/loop only. Other functionality split into separate .ino files
 #include "globals.h"
 
+// Uncomment to run SD card test on boot (calls sdTest() from 06_sd.ino)
+#define SD_TEST
+
+// sdTest() is implemented in 06_sd.ino
+extern void sdTest();
+
 // Ensure prototypes/externs are visible before setup uses them (helps Arduino single-file concat)
 extern TaskHandle_t networkTaskHandle;
 void sensorTask(void* pvParameters);
@@ -8,6 +14,11 @@ void sensorTask(void* pvParameters);
 void setup() {
   Serial.begin(115200);
   delay(50);
+
+#ifdef SD_TEST
+  // Run a quick SD verification test. Remove or comment out when done.
+  sdTest();
+#endif
 
   pinMode(PUMP_PIN, OUTPUT);
   digitalWrite(PUMP_PIN, LOW);
