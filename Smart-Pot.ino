@@ -13,7 +13,10 @@
 #include <ArduinoJson.h>
 #include <ArduinoOTA.h>
 #include <WiFiManager.h>
+#include <esp32-hal-ledc.h>
 #include "DHT.h"
+
+// Use esp32-hal-ledc pin-based API exposed by the ESP32 Arduino core
 
 // -------------------- Pins (change to your wiring) --------------------
 #define PUMP_PIN 14
@@ -21,7 +24,7 @@
 #define WATER_TOUCH_PIN 15  // touchRead
 #define DHT_PIN 32
 #define DHT_TYPE DHT11
-#define BAT_PIN 34  // ADC pin for battery measurement
+#define PUMP_LEDC_CHANNEL 0
 
 DHT dht(DHT_PIN, DHT_TYPE);
 
@@ -46,12 +49,19 @@ volatile bool pumpState = false;
 unsigned long pumpManualUntil = 0;
 unsigned long pumpAutoUntil = 0;
 
+// Pump task
+TaskHandle_t pumpTaskHandle = NULL;
+int lastAppliedDuty = -1;
+
 float lastSoilPercent = 0.0;
 uint16_t lastWaterRaw = 0;
 float lastWaterPercent = 0.0;
 float lastTemp = 0.0;
 float lastHum = 0.0;
-float lastBattery = 0.0;
+// PWM settings for pump (persisted)
+int pumpPwmFreq = 5000;           // Hz
+int pumpPwmResolution = 8;        // bits (0..(2^bits -1))
+int pumpPwmDuty = 255;            // duty (0..(2^bits -1))
 
 // -------------------- Persistence --------------------
 Preferences prefs;
@@ -114,40 +124,28 @@ float readWaterPercent(uint16_t raw) {
 }
 
 // -------------------- Battery --------------------
-float readBatteryVoltage() {
-  int raw = analogRead(BAT_PIN);
-  float v_pin = (raw / 4095.0f) * 3.3f;
-  const float VOLTAGE_DIVIDER = 2.44f;  // calculated from measured resistors
-  return v_pin * VOLTAGE_DIVIDER;
-}
-float readBatteryPercent() {
-  float Vbat = readBatteryVoltage();
-  const float Vmin = 6.0;  // 2S LiPo min safe voltage
-  const float Vmax = 8.4;  // 2S LiPo full charge
-  float pct = (Vbat - Vmin) / (Vmax - Vmin) * 100.0f;
-  return constrain(pct, 0.0f, 100.0f);
-}
+// battery measurement removed - device now uses wall power
 // -------------------- Pump --------------------
 void pumpOn() {
-  digitalWrite(PUMP_PIN, HIGH);
+  // start pump for default duration (set timeout)
   LOCK_STATE();
-  pumpState = true;
+  pumpManualUntil = millis() + (unsigned long)pumpDurationMs;
   UNLOCK_STATE();
 }
 
 void pumpOff() {
-  digitalWrite(PUMP_PIN, LOW);
+  // request immediate stop by clearing timers; pumpTask will do the LEDC write
   LOCK_STATE();
-  pumpState = false;
+  pumpManualUntil = 0;
+  pumpAutoUntil = 0;
   UNLOCK_STATE();
 }
 
 void startPumpMs(int ms) {
   LOCK_STATE();
   unsigned long until = millis() + (unsigned long)ms;
-  pumpManualUntil = max(pumpManualUntil, until);
-  pumpState = true;
-  digitalWrite(PUMP_PIN, HIGH);
+  // set the manual timeout directly (do not stack durations)
+  pumpManualUntil = until;
   UNLOCK_STATE();
 }
 
@@ -155,9 +153,58 @@ void stopPumpImmediate() {
   LOCK_STATE();
   pumpManualUntil = 0;
   pumpAutoUntil = 0;
-  pumpState = false;
-  digitalWrite(PUMP_PIN, LOW);
   UNLOCK_STATE();
+}
+
+// Pump control task: runs every 10ms, updates LEDC and pumpState under lock
+void pumpTask(void* pvParameters) {
+  (void)pvParameters;
+  for (;;) {
+    unsigned long now = millis();
+    bool shouldOn = false;
+    LOCK_STATE();
+    // evaluate manual timeout
+    if (pumpManualUntil != 0) {
+      if (now <= pumpManualUntil) {
+        shouldOn = true;
+      } else {
+        // timeout expired — clear
+        pumpManualUntil = 0;
+      }
+    }
+    // evaluate auto timeout
+    if (pumpAutoUntil != 0) {
+      if (now <= pumpAutoUntil) {
+        shouldOn = true;
+      } else {
+        pumpAutoUntil = 0;
+      }
+    }
+    // perform LEDC writes and update pumpState here to avoid races
+    if (shouldOn) {
+      if (!pumpState) {
+        // turning on
+        ledcWrite(PUMP_PIN, pumpPwmDuty);
+        lastAppliedDuty = pumpPwmDuty;
+        pumpState = true;
+      } else {
+        // already on: if duty changed, reapply
+        if (pumpPwmDuty != lastAppliedDuty) {
+          ledcWrite(PUMP_PIN, pumpPwmDuty);
+          lastAppliedDuty = pumpPwmDuty;
+        }
+      }
+    } else {
+      if (pumpState) {
+        // turning off
+        ledcWrite(PUMP_PIN, 0);
+        lastAppliedDuty = -1;
+        pumpState = false;
+      }
+    }
+    UNLOCK_STATE();
+    vTaskDelay(pdMS_TO_TICKS(10));
+  }
 }
 
 // -------------------- Persistence helpers --------------------
@@ -171,6 +218,9 @@ void saveCalibrationToPrefs() {
   }
   doc["soilBaseline"] = soilBaseline;
   doc["pumpDurationMs"] = pumpDurationMs;
+  doc["pumpPwmFreq"] = pumpPwmFreq;
+  doc["pumpPwmResolution"] = pumpPwmResolution;
+  doc["pumpPwmDuty"] = pumpPwmDuty;
   doc["sensorUpdateInterval"] = sensorUpdateInterval;
   String s;
   serializeJson(doc, s);
@@ -188,6 +238,9 @@ void loadCalibrationFromPrefs() {
   }
   if (doc.containsKey("soilBaseline")) soilBaseline = doc["soilBaseline"].as<float>();
   if (doc.containsKey("pumpDurationMs")) pumpDurationMs = doc["pumpDurationMs"].as<int>();
+  if (doc.containsKey("pumpPwmFreq")) pumpPwmFreq = doc["pumpPwmFreq"].as<int>();
+  if (doc.containsKey("pumpPwmResolution")) pumpPwmResolution = doc["pumpPwmResolution"].as<int>();
+  if (doc.containsKey("pumpPwmDuty")) pumpPwmDuty = doc["pumpPwmDuty"].as<int>();
   if (doc.containsKey("sensorUpdateInterval")) sensorUpdateInterval = doc["sensorUpdateInterval"].as<unsigned long>();
   if (doc["map"].is<JsonArray>()) {
     std::vector<CalPoint> newmap;
@@ -210,7 +263,6 @@ void handleStatus() {
   doc["temperature"] = lastTemp;
   doc["humidity"] = lastHum;
   doc["pump_on"] = pumpState;
-  doc["battery_percent"] = lastBattery;  // now percentage only
   UNLOCK_STATE();
   String out;
   serializeJson(doc, out);
@@ -223,6 +275,9 @@ void handleCalibrationGet() {
   LOCK_STATE();
   doc["soilBaseline"] = soilBaseline;
   doc["pumpDurationMs"] = pumpDurationMs;
+  doc["pumpPwmFreq"] = pumpPwmFreq;
+  doc["pumpPwmResolution"] = pumpPwmResolution;
+  doc["pumpPwmDuty"] = pumpPwmDuty;
   doc["sensorUpdateInterval"] = sensorUpdateInterval;
   JsonArray arr = doc.createNestedArray("water_map");
   for (auto& p : waterMap) {
@@ -256,6 +311,19 @@ void handleSettingsPost() {
   LOCK_STATE();
   if (doc.containsKey("soilBaseline")) soilBaseline = doc["soilBaseline"].as<float>();
   if (doc.containsKey("pumpDurationMs")) pumpDurationMs = doc["pumpDurationMs"].as<int>();
+  bool reconfigPwm = false;
+  if (doc.containsKey("pumpPwmFreq")) {
+    pumpPwmFreq = doc["pumpPwmFreq"].as<int>();
+    reconfigPwm = true;
+  }
+  if (doc.containsKey("pumpPwmResolution")) {
+    pumpPwmResolution = doc["pumpPwmResolution"].as<int>();
+    reconfigPwm = true;
+  }
+  if (doc.containsKey("pumpPwmDuty")) {
+    pumpPwmDuty = doc["pumpPwmDuty"].as<int>();
+    reconfigPwm = true;
+  }
   if (doc.containsKey("sensorUpdateInterval")) sensorUpdateInterval = doc["sensorUpdateInterval"].as<unsigned long>();
   if (doc.containsKey("water_map") && doc["water_map"].is<JsonArray>()) {
     std::vector<CalPoint> newmap;
@@ -268,6 +336,19 @@ void handleSettingsPost() {
     if (newmap.size() >= 2) waterMap = newmap;
   }
   saveCalibrationToPrefs();
+  // apply PWM reconfiguration if requested
+  if (reconfigPwm) {
+    if (pumpPwmResolution < 1) pumpPwmResolution = 1;
+    if (pumpPwmResolution > 15) pumpPwmResolution = 15;
+    if (pumpPwmFreq <= 0) pumpPwmFreq = 5000;
+    int maxDuty = (1 << pumpPwmResolution) - 1;
+    if (pumpPwmDuty < 0) pumpPwmDuty = 0;
+    if (pumpPwmDuty > maxDuty) pumpPwmDuty = maxDuty;
+  // switch to pin-based attach exposed by this core
+  ledcAttach(PUMP_PIN, pumpPwmFreq, pumpPwmResolution);
+  // clear lastAppliedDuty to force pumpTask to reapply duty if needed
+  lastAppliedDuty = -1;
+  }
   UNLOCK_STATE();
   server.send(200, "application/json", "{\"ok\":true}");
 }
@@ -330,27 +411,8 @@ void sensorTask(void* pvParameters) {
     float waterPct = readWaterPercent(waterRaw);
     float t = dht.readTemperature();
     float h = dht.readHumidity();
-    float batt = readBatteryVoltage();
 
-    // Example auto pump logic
-    if (waterPct >= 60.0f) {
-      LOCK_STATE();
-      pumpAutoUntil = max(pumpAutoUntil, millis() + (unsigned long)pumpDurationMs);
-      UNLOCK_STATE();
-      pumpOn();
-    }
-
-    // handle pump timeouts
-    LOCK_STATE();
-    if (pumpManualUntil != 0 && millis() > pumpManualUntil) {
-      pumpManualUntil = 0;
-      pumpState = false;
-      digitalWrite(PUMP_PIN, LOW);
-    } else if (pumpAutoUntil != 0 && millis() > pumpAutoUntil) {
-      pumpAutoUntil = 0;
-      pumpState = false;
-      digitalWrite(PUMP_PIN, LOW);
-    }
+    // no automatic pump-on behavior here (previous 60% test removed)
 
     // update shared values
     lastSoilPercent = soilPct;
@@ -358,11 +420,9 @@ void sensorTask(void* pvParameters) {
     lastWaterPercent = waterPct;
     lastTemp = t;
     lastHum = h;
-    lastBattery = readBatteryPercent();
     UNLOCK_STATE();
-
-    Serial.printf("SENS soil=%.1f%% tank=%.1f%% raw=%u T=%.1fC H=%.1f%% bat=%.2fV pump=%s\n",
-                  soilPct, waterPct, waterRaw, t, h, batt, pumpState ? "ON" : "OFF");
+    Serial.printf("SENS soil=%.1f%% tank=%.1f%% raw=%u T=%.1fC H=%.1f%% pump=%s\n",
+                  soilPct, waterPct, waterRaw, t, h, pumpState ? "ON" : "OFF");
     Serial.println(analogRead(SOIL_PIN));
   }
 }
@@ -431,7 +491,6 @@ void setup() {
   pinMode(PUMP_PIN, OUTPUT);
   digitalWrite(PUMP_PIN, LOW);
   analogReadResolution(12);
-  analogSetPinAttenuation(BAT_PIN, ADC_11db);
   analogSetPinAttenuation(SOIL_PIN, ADC_11db);  // was missing
   dht.begin();
 
@@ -446,6 +505,19 @@ void setup() {
   prefs.begin(PREF_NAMESPACE, false);
   loadCalibrationFromPrefs();
 
+  // configure LEDC PWM for pump (MOSFET gate) using loaded prefs
+  if (pumpPwmResolution < 1) pumpPwmResolution = 1;
+  if (pumpPwmResolution > 15) pumpPwmResolution = 15;
+  if (pumpPwmFreq <= 0) pumpPwmFreq = 5000;
+  int maxDuty = (1 << pumpPwmResolution) - 1;
+  if (pumpPwmDuty < 0) pumpPwmDuty = 0;
+  if (pumpPwmDuty > maxDuty) pumpPwmDuty = maxDuty;
+  // older API used channels; the esp32-hal-ledc we're using exposes
+  // a pin-based attach: ledcAttach(pin, freq, resolution)
+  ledcAttach(PUMP_PIN, pumpPwmFreq, pumpPwmResolution);
+  // start with pump off: pin was already driven LOW above via digitalWrite
+  // actual LEDC duty will be managed by pumpTask to avoid races
+
   // soil baseline calibration
   float sum = 0;
   for (int i = 0; i < 10; i++) {
@@ -455,6 +527,9 @@ void setup() {
   if (soilBaseline <= 1.0f) soilBaseline = sum / 10.0f;
   Serial.printf("soilBaseline=%.1f\n", soilBaseline);
 
+  // start sensor task on core 1
+  // start pump task on core 1 (handles LEDC writes and timeouts)
+  xTaskCreatePinnedToCore(pumpTask, "pumpTask", 2048, NULL, 2, &pumpTaskHandle, 1);
   // start sensor task on core 1
   xTaskCreatePinnedToCore(sensorTask, "sensorTask", 4096, NULL, 1, &sensorTaskHandle, 1);
 

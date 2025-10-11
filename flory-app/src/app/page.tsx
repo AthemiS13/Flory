@@ -8,7 +8,10 @@ type StatusData = {
   temperature: number;
   humidity: number;
   pump_on: boolean;
-  battery_percent: number;
+  // battery removed; no battery_percent
+  pumpPwmFreq?: number;
+  pumpPwmResolution?: number;
+  pumpPwmDuty?: number;
 };
 
 export default function Home() {
@@ -43,6 +46,9 @@ export default function Home() {
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [pumpDuration, setPumpDuration] = useState(3000);
   const [sensorInterval, setSensorInterval] = useState(1000);
+  const [pumpPwmFreq, setPumpPwmFreq] = useState(5000);
+  const [pumpPwmRes, setPumpPwmRes] = useState(8);
+  const [pumpPwmDuty, setPumpPwmDuty] = useState(255);
 
   // Pump control handlers
   async function handlePump(action: "start" | "stop") {
@@ -71,7 +77,13 @@ export default function Home() {
     setSettingsLoading(true);
     setSettingsError(null);
     try {
-      const body = JSON.stringify({ pumpDurationMs: pumpDuration, sensorUpdateInterval: sensorInterval });
+      const body = JSON.stringify({
+        pumpDurationMs: pumpDuration,
+        sensorUpdateInterval: sensorInterval,
+        pumpPwmFreq: pumpPwmFreq,
+        pumpPwmResolution: pumpPwmRes,
+        pumpPwmDuty: pumpPwmDuty,
+      });
       const res = await fetch("/api/flory-settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -113,10 +125,7 @@ export default function Home() {
               <span className="font-semibold">Pump State</span>
               <span className={`font-mono ${data.pump_on ? "text-pink-400" : "text-gray-400"}`}>{data.pump_on ? "ON" : "OFF"}</span>
             </li>
-            <li className="flex justify-between items-center text-lg text-white">
-              <span className="font-semibold">Battery Percentage</span>
-              <span className="font-mono text-purple-400">{typeof data.battery_percent === "number" ? data.battery_percent + " %" : "N/A"}</span>
-            </li>
+            {/* Battery removed - device uses wall power */}
           </ul>
         </div>
       )}
@@ -151,6 +160,38 @@ export default function Home() {
               onChange={e => setPumpDuration(Number(e.target.value))}
               min={100}
               max={20000}
+            />
+          </label>
+          <label className="flex flex-col text-white">
+            <span className="mb-1">Pump PWM Frequency (Hz)</span>
+            <input
+              type="number"
+              className="bg-black border border-neutral-700 rounded px-2 py-1 text-white font-mono"
+              value={pumpPwmFreq}
+              onChange={e => setPumpPwmFreq(Number(e.target.value))}
+              min={1}
+              max={40000}
+            />
+          </label>
+          <label className="flex flex-col text-white">
+            <span className="mb-1">Pump PWM Resolution (bits)</span>
+            <input
+              type="number"
+              className="bg-black border border-neutral-700 rounded px-2 py-1 text-white font-mono"
+              value={pumpPwmRes}
+              onChange={e => setPumpPwmRes(Number(e.target.value))}
+              min={1}
+              max={15}
+            />
+          </label>
+          <label className="flex flex-col text-white">
+            <span className="mb-1">Pump PWM Duty (raw)</span>
+            <input
+              type="number"
+              className="bg-black border border-neutral-700 rounded px-2 py-1 text-white font-mono"
+              value={pumpPwmDuty}
+              onChange={e => setPumpPwmDuty(Number(e.target.value))}
+              min={0}
             />
           </label>
           <label className="flex flex-col text-white">

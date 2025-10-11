@@ -14,6 +14,7 @@ The Flory API offers a simple HTTP-based interface for **monitoring, configuring
 It provides functionality for:
 
   * Real-time sensor data (**soil moisture**, **tank level**, **temperature**, **humidity**, **battery percentage**).
+  * Note: battery support removed — device uses a wall power supply.
   * **Pump control** (manual trigger/stop).
   * Device configuration (calibration map, timing, intervals).
   * **OTA firmware updates** (via Arduino IDE).
@@ -71,7 +72,9 @@ No authentication is currently required for accessing or controlling the device.
 | **`temperature`** | `float` | Ambient temperature ($\text{°C}$, from DHT sensor). |
 | **`humidity`** | `float` | Relative humidity (%). |
 | **`pump_on`** | `boolean` | Whether the water pump is currently active. |
-| **`battery_percent`** | `float` | Battery voltage in percentage. |
+| **`pumpPwmFreq`** | `int` | PWM frequency configured for the pump (Hz). |
+| **`pumpPwmResolution`** | `int` | PWM resolution in bits. |
+| **`pumpPwmDuty`** | `int` | PWM duty cycle (raw value for configured resolution). |
 
 **Response Example:**
 
@@ -82,7 +85,9 @@ No authentication is currently required for accessing or controlling the device.
   "temperature": 23.1,
   "humidity": 52.4,
   "pump_on": false,
-  "battery_percent": 4.12
+  "pumpPwmFreq": 5000,
+  "pumpPwmResolution": 8,
+  "pumpPwmDuty": 255
 }
 ```
 
@@ -97,6 +102,9 @@ No authentication is currently required for accessing or controlling the device.
 | **`soilBaseline`** | `float` | Reference raw analog value for dry soil (used for soil moisture normalization). |
 | **`pumpDurationMs`** | `int` | Default pump run time for automatic watering (milliseconds). |
 | **`sensorUpdateInterval`** | `int` | Interval between sensor readings (milliseconds). |
+| **`pumpPwmFreq`** | `int` | PWM frequency for pump (Hz). |
+| **`pumpPwmResolution`** | `int` | PWM resolution in bits. |
+| **`pumpPwmDuty`** | `int` | PWM duty (raw value). |
 | **`water_map`** | `array` | Calibration table mapping raw touch readings to tank fill percentages. |
 | **`last_water_raw`** | `int` | Latest raw touch sensor value (for manual calibration visualization). |
 
@@ -131,6 +139,7 @@ No authentication is currently required for accessing or controlling the device.
   * The soil baseline (`soilBaseline`).
   * Pump duration (`pumpDurationMs`).
   * Sensor update interval (`sensorUpdateInterval`).
+  * Pump PWM configuration (`pumpPwmFreq`, `pumpPwmResolution`, `pumpPwmDuty`).
 
 **Notes:**
 
@@ -177,7 +186,7 @@ No authentication is currently required for accessing or controlling the device.
 **Notes:**
 
   * Manual actions **override** the automatic control logic until the action is completed.
-  * The automatic logic will run the pump if the tank level is $\ge 60\%$.
+  * There is no automatic pump action enabled by default in this firmware build.
 
 **Request Examples:**
 
