@@ -69,3 +69,40 @@ void setup() {
 void loop() {
   vTaskDelay(pdMS_TO_TICKS(1000));
 }
+
+// -------------------- To do --------------------
+
+//SENSORS
+///DHT11 - TEMPERATURE AND HUMIDITY SENSOR
+// returns temp in celsius and the humidity in percent as is, no settings needed
+
+///SOIL MOISTURE SENSOR
+// Check the percentage calculation logic
+//add calibration api to set dry and wet soil values and also watering treshold value
+//expose raw value via api
+
+///WATER LEVEL SENSOR
+// expose raw value via api
+// Check calibration map in api
+
+//PUMP CONTROL (PWM)
+// keep only duty cycle setting, remove freq and resolution from api
+
+//Other settings
+// sensor update interval
+// Device restart api
+// File manager drag and drop to edit the web files on the sd card
+// Add mdns support to web server
+// logging interval setting
+// a deadzone setting for when not to water (e.g. between 22:00 and 6:00)
+
+
+// -------------------- Automated Operation --------------------
+// Add support for automated watering based on soil moisture levels
+// e.g. if soil moisture < threshold, activate pump for defined duration
+// use a time server to avoid watering at night
+// threshold and duration configurable via api as mentioned above
+// store logs of sensors and activity into sd card /log folder in root
+// rewrite logs every month to avoid filling up the sd card
+// use efficient way to write logs to avoid excessive sd card wear
+
