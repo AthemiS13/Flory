@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
+import { espUrl, ENDPOINTS } from '@/lib/esp';
 
 export async function GET() {
   try {
-    // Change this to your ESP32's IP address
-    const res = await fetch('http://192.168.0.28/api/status');
+    const res = await fetch(espUrl(ENDPOINTS.status));
     if (!res.ok) {
       return NextResponse.json({ error: 'Failed to fetch from ESP32' }, { status: 500 });
     }

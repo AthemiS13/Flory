@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
+import { espUrl, ENDPOINTS } from '@/lib/esp';
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const res = await fetch('http://192.168.0.28/api/pump', {
+    const res = await fetch(espUrl(ENDPOINTS.pump), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
