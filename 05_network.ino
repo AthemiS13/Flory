@@ -136,6 +136,38 @@ void handleRestart() {
   ESP.restart();
 }
 
+// --- Static file serving from SD card ---------------------------------
+#include <SD.h>
+
+String getContentType(const String &filename) {
+  if (filename.endsWith(".htm") || filename.endsWith(".html")) return "text/html";
+  if (filename.endsWith(".css")) return "text/css";
+  if (filename.endsWith(".js")) return "application/javascript";
+  if (filename.endsWith(".png")) return "image/png";
+  if (filename.endsWith(".jpg") || filename.endsWith(".jpeg")) return "image/jpeg";
+  if (filename.endsWith(".ico")) return "image/x-icon";
+  if (filename.endsWith(".svg")) return "image/svg+xml";
+  if (filename.endsWith(".json")) return "application/json";
+  if (filename.endsWith(".txt")) return "text/plain";
+  if (filename.endsWith(".csv")) return "text/csv";
+  return "application/octet-stream";
+}
+
+// Try to serve a file from SD matching the request URI. Returns true if served.
+bool handleFileRead() {
+  String path = server.uri();
+  if (path == "/") path = "/index.html";
+  if (path.endsWith("/")) path += "index.html";
+  Serial.printf("Web request for: %s\n", path.c_str());
+  if (!SD.exists(path.c_str())) return false;
+  File file = SD.open(path.c_str());
+  if (!file) return false;
+  String contentType = getContentType(path);
+  server.streamFile(file, contentType.c_str());
+  file.close();
+  return true;
+}
+
 void startWebRoutes() {
   server.on("/api/status", HTTP_GET, handleStatus);
   server.on("/api/calibration", HTTP_GET, handleCalibrationGet);
@@ -143,6 +175,8 @@ void startWebRoutes() {
   server.on("/api/pump", HTTP_POST, handlePumpPost);
   server.on("/api/restart", HTTP_POST, handleRestart);
   server.onNotFound([]() {
+    // Try serving static file from SD first
+    if (handleFileRead()) return;
     server.send(404, "text/plain", "Not found");
   });
   server.begin();
@@ -178,6 +212,13 @@ void networkTask(void* parameter) {
   }
   Serial.print("[WiFi] Connected! IP: ");
   Serial.println(WiFi.localIP());
+
+  // Initialize SD for static file serving (best effort)
+  if (sdInit()) {
+    Serial.println("SD initialized for web serving");
+  } else {
+    Serial.println("SD not initialized; web static files disabled");
+  }
 
   startOTAwithPassword();
   startWebRoutes();

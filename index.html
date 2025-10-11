@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>SmartPot — SD Web App</title>
+	<link rel="stylesheet" href="/app/styles.css">
+</head>
+<body>
+	<div class="container">
+		<header>
+			<h1>SmartPot</h1>
+			<p class="muted">Serving from SD card</p>
+		</header>
+
+		<main>
+			<section class="card">
+				<h2>Device Status</h2>
+				<div id="status">
+					<div class="row"><strong>Soil:</strong> <span id="soil">—</span></div>
+					<div class="row"><strong>Water:</strong> <span id="water">—</span></div>
+					<div class="row"><strong>Temp:</strong> <span id="temp">—</span> °C</div>
+					<div class="row"><strong>Humidity:</strong> <span id="hum">—</span> %</div>
+					<div class="row"><strong>Pump:</strong> <span id="pump">—</span></div>
+				</div>
+				<div class="actions">
+					<button id="refresh">Refresh</button>
+				</div>
+			</section>
+
+			<section class="card">
+				<h2>Controls</h2>
+				<div class="actions">
+					<button id="pumpOn">Start Pump (5s)</button>
+					<button id="pumpOff">Stop Pump</button>
+				</div>
+			</section>
+		</main>
+
+		<footer>
+			<small>SmartPot hosted from SD</small>
+		</footer>
+	</div>
+
+	<script>
+		async function fetchStatus() {
+			try {
+				const res = await fetch('/api/status');
+				if (!res.ok) throw new Error('HTTP ' + res.status);
+				const data = await res.json();
+				document.getElementById('soil').textContent = data.soil_percent + '%';
+				document.getElementById('water').textContent = data.water_percent + '%';
+				document.getElementById('temp').textContent = data.temperature.toFixed(1);
+				document.getElementById('hum').textContent = data.humidity.toFixed(1);
+				document.getElementById('pump').textContent = data.pump_on ? 'ON' : 'OFF';
+			} catch (e) {
+				console.error(e);
+			}
+		}
+
+		document.getElementById('refresh').addEventListener('click', fetchStatus);
+		document.getElementById('pumpOn').addEventListener('click', async () => {
+			await fetch('/api/pump', { method: 'POST', body: JSON.stringify({ action: 'start', durationMs: 5000 }) });
+			fetchStatus();
+		});
+		document.getElementById('pumpOff').addEventListener('click', async () => {
+			await fetch('/api/pump', { method: 'POST', body: JSON.stringify({ action: 'stop' }) });
+			fetchStatus();
+		});
+
+		// initial load
+		fetchStatus();
+	</script>
+</body>
+</html>

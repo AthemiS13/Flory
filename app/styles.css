@@ -1,0 +1,21 @@
+/* Simple responsive styles for SmartPot UI */
+:root{
+  --bg:#f4f6f8;
+  --card:#ffffff;
+  --accent:#2b8cff;
+  --muted:#6b7280;
+  --shadow: 0 6px 18px rgba(11,22,40,0.06);
+}
+body{font-family:Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial; background:var(--bg); color:#0b1728; margin:0}
+.container{max-width:860px;margin:32px auto;padding:16px}
+header{display:flex;align-items:baseline;gap:12px}
+header h1{margin:0;font-size:20px}
+.muted{color:var(--muted);margin:0}
+main{display:grid;grid-template-columns:1fr 360px;gap:16px;margin-top:18px}
+.card{background:var(--card);padding:16px;border-radius:10px;box-shadow:var(--shadow)}
+.row{display:flex;justify-content:space-between;padding:6px 0}
+.actions{margin-top:12px;display:flex;gap:8px}
+button{background:var(--accent);color:white;border:0;padding:8px 12px;border-radius:8px;cursor:pointer}
+button.secondary{background:#e6eefc;color:var(--accent)}
+footer{margin-top:18px;text-align:center;color:var(--muted)}
+@media (max-width:760px){main{grid-template-columns:1fr;}}
