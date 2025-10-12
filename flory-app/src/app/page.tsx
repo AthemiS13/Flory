@@ -79,6 +79,8 @@ export default function Home() {
   const [pumpError, setPumpError] = useState<string | null>(null);
   const [restartLoading, setRestartLoading] = useState(false);
   const [restartMessage, setRestartMessage] = useState<string | null>(null);
+  const [wipeLoading, setWipeLoading] = useState(false);
+  const [wipeMessage, setWipeMessage] = useState<string | null>(null);
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [pumpDuration, setPumpDuration] = useState(3000);
@@ -105,6 +107,9 @@ export default function Home() {
     error: string | null;
   };
   const [uploadQueue, setUploadQueue] = useState<UploadItem[]>([]);
+  const [emergencyUploading, setEmergencyUploading] = useState(false);
+  const [emergencyProgress, setEmergencyProgress] = useState<number | null>(null);
+  const [emergencyError, setEmergencyError] = useState<string | null>(null);
 
   async function uploadFile(idx: number) {
     const item = uploadQueue[idx];
@@ -154,6 +159,79 @@ export default function Home() {
         }
       }
     })();
+  }
+
+  // Emergency single-request upload: sends all files in one multipart POST.
+  // This is destructive on the device (first received file triggers wiping /app).
+  async function emergencyUploadAll() {
+    if (uploadQueue.length === 0) return;
+    if (!confirm('EMERGENCY: this will erase all files under /app on the device SD. Continue?')) return;
+    setEmergencyError(null);
+    setEmergencyUploading(true);
+    setEmergencyProgress(0);
+    // Snapshot items to upload
+    const items = [...uploadQueue];
+    // Mark all as uploading
+    setUploadQueue(q => q.map(it => ({ ...it, status: 'uploading', progress: 0, error: null })));
+
+    try {
+      const fd = new FormData();
+      for (const it of items) {
+        // append each file and set the filename to the remote path so the firmware
+        // recreates folder structure on the SD.
+        fd.append('file', it.file, it.remotePath);
+        // also include filename field for servers that read a separate field
+        fd.append('filename', it.remotePath);
+      }
+
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', '/api/flory-sd-upload');
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) {
+            const pct = Math.round((e.loaded / e.total) * 100);
+            setEmergencyProgress(pct);
+          }
+        };
+        xhr.onload = () => {
+          setEmergencyUploading(false);
+          setEmergencyProgress(100);
+          if (xhr.status >= 200 && xhr.status < 300) {
+            // try to parse response JSON
+            let json: any = null;
+            try { json = JSON.parse(xhr.responseText || 'null'); } catch (e) { json = null; }
+            // mark all items done if response ok-like, otherwise surface the response
+            if (!json || json.ok || json._raw || xhr.status === 200) {
+              setUploadQueue(q => q.map(it => ({ ...it, status: 'done', progress: 100 })));
+              resolve();
+            } else {
+              const err = JSON.stringify(json);
+              setUploadQueue(q => q.map(it => ({ ...it, status: 'error', error: err })));
+              setEmergencyError('Device responded with error: ' + err);
+              reject(new Error(err));
+            }
+          } else {
+            const msg = `Upload failed: ${xhr.status} ${xhr.statusText}`;
+            setUploadQueue(q => q.map(it => ({ ...it, status: 'error', error: msg })));
+            setEmergencyError(msg);
+            reject(new Error(msg));
+          }
+        };
+        xhr.onerror = () => {
+          setEmergencyUploading(false);
+          const msg = 'Network or CORS error during upload';
+          setUploadQueue(q => q.map(it => ({ ...it, status: 'error', error: msg })));
+          setEmergencyError(msg);
+          reject(new Error(msg));
+        };
+        xhr.send(fd);
+      });
+    } catch (e: any) {
+      // already handled above
+    } finally {
+      setEmergencyUploading(false);
+      // leave emergencyProgress at final value
+    }
   }
 
   // Helper: convert DataTransferItemList to UploadItem[] recursively (supports folders)
@@ -359,9 +437,37 @@ export default function Home() {
           >
             Restart Device
           </button>
+          <button
+            className="bg-red-900 hover:bg-red-800 text-white font-bold py-2 px-4 rounded transition disabled:opacity-50"
+            onClick={async () => {
+              if (!confirm('DANGER: This will WIPE everything under /app on the device SD. Are you sure?')) return;
+              setWipeLoading(true);
+              setWipeMessage(null);
+              try {
+                // The device is reachable at `flory.local` in many setups (mDNS).
+                // Calling it directly matches what you said works when visiting
+                // `http://flory.local/sd/wipe?force=1` in the browser.
+                // Use GET to match a simple browser navigation; firmware accepts this.
+                const url = 'http://flory.local/sd/wipe?force=1';
+                const res = await fetch(url, { method: 'POST' });
+                if (!res.ok) throw new Error(`Wipe request failed: ${res.status} ${res.statusText}`);
+                // firmware may return JSON or plain text; try JSON first
+                const json = await res.json().catch(async () => ({ _raw: await res.text().catch(() => '') }));
+                setWipeMessage(JSON.stringify(json));
+              } catch (e: any) {
+                setWipeMessage(e.message ?? 'Wipe error');
+              } finally {
+                setWipeLoading(false);
+              }
+            }}
+            disabled={wipeLoading}
+          >
+            WIPE /app
+          </button>
         </div>
         {pumpError && <p className="text-red-400 mb-4 font-mono">{pumpError}</p>}
   {restartMessage && <p className="text-yellow-300 mb-4 font-mono">{restartMessage}</p>}
+    {wipeMessage && <p className="text-red-300 mb-4 font-mono">{wipeMessage}</p>}
         <form onSubmit={handleSettings} className="flex flex-col gap-4">
           <label className="flex flex-col text-white">
             <span className="mb-1">Pump Duration (ms)</span>
@@ -632,6 +738,24 @@ export default function Home() {
         <div className="flex gap-2 mt-4">
           <button className="bg-green-600 text-black font-bold py-2 px-4 rounded" onClick={() => uploadAll()}>Upload All</button>
           <button className="bg-gray-700 text-white font-bold py-2 px-4 rounded" onClick={() => setUploadQueue([])}>Clear</button>
+        </div>
+        {/* Emergency single-request uploader */}
+        <div className="mt-4 border-t border-neutral-800 pt-4">
+          <div className="text-sm text-yellow-300 font-mono mb-2">EMERGENCY: Single-request upload (destructive)</div>
+          <div className="text-xs text-neutral-400 mb-2">This will attempt to send all files in a single POST. The device will wipe /app on the first file received. Only use when necessary.</div>
+          <div className="flex gap-2">
+            <button
+              className="bg-red-700 hover:bg-red-800 text-white font-bold py-2 px-4 rounded"
+              onClick={() => emergencyUploadAll()}
+              disabled={emergencyUploading || uploadQueue.length === 0}
+            >
+              Emergency Upload All
+            </button>
+            <div className="flex-1 self-center text-right text-sm text-neutral-400">
+              {emergencyUploading && emergencyProgress !== null && <span>Progress: {emergencyProgress}%</span>}
+              {emergencyError && <div className="text-red-400 mt-1 font-mono">{emergencyError}</div>}
+            </div>
+          </div>
         </div>
       </div>
 
