@@ -23,6 +23,9 @@ struct CalPoint { uint16_t raw; float percent; };
 
 extern std::vector<CalPoint> waterMap;
 extern float soilBaseline;
+extern uint16_t soilDryRaw;
+extern uint16_t soilWetRaw;
+extern float wateringThreshold;
 extern int pumpDurationMs;
 extern unsigned long sensorUpdateInterval;
 
@@ -37,6 +40,7 @@ extern TaskHandle_t networkTaskHandle;
 extern int lastAppliedDuty;
 
 extern float lastSoilPercent;
+extern uint16_t lastSoilRaw;
 extern uint16_t lastWaterRaw;
 extern float lastWaterPercent;
 extern float lastTemp;

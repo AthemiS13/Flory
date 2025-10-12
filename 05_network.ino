@@ -18,6 +18,9 @@ void handleCalibrationGet() {
   DynamicJsonDocument doc(1024);
   LOCK_STATE();
   doc["soilBaseline"] = soilBaseline;
+  doc["soilDryRaw"] = soilDryRaw;
+  doc["soilWetRaw"] = soilWetRaw;
+  doc["wateringThreshold"] = wateringThreshold;
   doc["pumpDurationMs"] = pumpDurationMs;
   doc["pumpPwmFreq"] = pumpPwmFreq;
   doc["pumpPwmResolution"] = pumpPwmResolution;
@@ -30,6 +33,7 @@ void handleCalibrationGet() {
     o["percent"] = p.percent;
   }
   doc["last_water_raw"] = lastWaterRaw;
+  doc["last_soil_raw"] = lastSoilRaw;
   UNLOCK_STATE();
   String out;
   serializeJson(doc, out);
@@ -54,6 +58,9 @@ void handleSettingsPost() {
   }
   LOCK_STATE();
   if (doc.containsKey("soilBaseline")) soilBaseline = doc["soilBaseline"].as<float>();
+  if (doc.containsKey("soilDryRaw")) soilDryRaw = (uint16_t)doc["soilDryRaw"].as<int>();
+  if (doc.containsKey("soilWetRaw")) soilWetRaw = (uint16_t)doc["soilWetRaw"].as<int>();
+  if (doc.containsKey("wateringThreshold")) wateringThreshold = doc["wateringThreshold"].as<float>();
   if (doc.containsKey("pumpDurationMs")) pumpDurationMs = doc["pumpDurationMs"].as<int>();
   bool reconfigPwm = false;
   if (doc.containsKey("pumpPwmFreq")) {
@@ -221,6 +228,22 @@ void handleSdList() {
 void startWebRoutes() {
   server.on("/api/status", HTTP_GET, handleStatus);
   server.on("/api/calibration", HTTP_GET, handleCalibrationGet);
+  server.on("/api/settings", HTTP_GET, []() {
+    DynamicJsonDocument doc(512);
+    LOCK_STATE();
+    doc["soilBaseline"] = soilBaseline;
+    doc["soilDryRaw"] = soilDryRaw;
+    doc["soilWetRaw"] = soilWetRaw;
+    doc["wateringThreshold"] = wateringThreshold;
+    doc["pumpDurationMs"] = pumpDurationMs;
+    doc["sensorUpdateInterval"] = sensorUpdateInterval;
+  doc["last_soil_raw"] = lastSoilRaw;
+  doc["last_water_raw"] = lastWaterRaw;
+    UNLOCK_STATE();
+    String out;
+    serializeJson(doc, out);
+    server.send(200, "application/json", out);
+  });
   server.on("/sd/list", HTTP_GET, handleSdList);
   server.on("/api/settings", HTTP_POST, handleSettingsPost);
   server.on("/api/pump", HTTP_POST, handlePumpPost);

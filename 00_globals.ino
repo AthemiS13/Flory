@@ -25,6 +25,12 @@ std::vector<CalPoint> waterMap = {
 };
 
 float soilBaseline = 0.0f;
+// New soil calibration values (raw ADC)
+// Default to inverted-sensor orientation (dry = higher reading, wet = lower)
+uint16_t soilDryRaw = 4095;   // dry soil raw reading (default: high)
+uint16_t soilWetRaw = 0;      // wet soil raw reading (default: low)
+// watering threshold in percent (0-100)
+float wateringThreshold = 30.0f;
 int pumpDurationMs = 5000;
 unsigned long sensorUpdateInterval = 1000;  // ms
 
@@ -42,6 +48,7 @@ int lastAppliedDuty = -1;
 TaskHandle_t networkTaskHandle = NULL;
 
 float lastSoilPercent = 0.0;
+uint16_t lastSoilRaw = 0;
 uint16_t lastWaterRaw = 0;
 float lastWaterPercent = 0.0;
 float lastTemp = 0.0;

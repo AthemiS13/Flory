@@ -9,6 +9,9 @@ void saveCalibrationToPrefs() {
   }
   doc["soilBaseline"] = soilBaseline;
   doc["pumpDurationMs"] = pumpDurationMs;
+  doc["soilDryRaw"] = soilDryRaw;
+  doc["soilWetRaw"] = soilWetRaw;
+  doc["wateringThreshold"] = wateringThreshold;
   doc["pumpPwmFreq"] = pumpPwmFreq;
   doc["pumpPwmResolution"] = pumpPwmResolution;
   doc["pumpPwmDuty"] = pumpPwmDuty;
@@ -29,6 +32,9 @@ void loadCalibrationFromPrefs() {
   }
   if (doc.containsKey("soilBaseline")) soilBaseline = doc["soilBaseline"].as<float>();
   if (doc.containsKey("pumpDurationMs")) pumpDurationMs = doc["pumpDurationMs"].as<int>();
+  if (doc.containsKey("soilDryRaw")) soilDryRaw = (uint16_t)doc["soilDryRaw"].as<int>();
+  if (doc.containsKey("soilWetRaw")) soilWetRaw = (uint16_t)doc["soilWetRaw"].as<int>();
+  if (doc.containsKey("wateringThreshold")) wateringThreshold = doc["wateringThreshold"].as<float>();
   if (doc.containsKey("pumpPwmFreq")) pumpPwmFreq = doc["pumpPwmFreq"].as<int>();
   if (doc.containsKey("pumpPwmResolution")) pumpPwmResolution = doc["pumpPwmResolution"].as<int>();
   if (doc.containsKey("pumpPwmDuty")) pumpPwmDuty = doc["pumpPwmDuty"].as<int>();
