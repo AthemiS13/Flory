@@ -22,8 +22,6 @@ void handleCalibrationGet() {
   doc["soilWetRaw"] = soilWetRaw;
   doc["wateringThreshold"] = wateringThreshold;
   doc["pumpDurationMs"] = pumpDurationMs;
-  doc["pumpPwmFreq"] = pumpPwmFreq;
-  doc["pumpPwmResolution"] = pumpPwmResolution;
   doc["pumpPwmDuty"] = pumpPwmDuty;
   doc["sensorUpdateInterval"] = sensorUpdateInterval;
   JsonArray arr = doc.createNestedArray("water_map");
@@ -62,18 +60,11 @@ void handleSettingsPost() {
   if (doc.containsKey("soilWetRaw")) soilWetRaw = (uint16_t)doc["soilWetRaw"].as<int>();
   if (doc.containsKey("wateringThreshold")) wateringThreshold = doc["wateringThreshold"].as<float>();
   if (doc.containsKey("pumpDurationMs")) pumpDurationMs = doc["pumpDurationMs"].as<int>();
-  bool reconfigPwm = false;
-  if (doc.containsKey("pumpPwmFreq")) {
-    pumpPwmFreq = doc["pumpPwmFreq"].as<int>();
-    reconfigPwm = true;
-  }
-  if (doc.containsKey("pumpPwmResolution")) {
-    pumpPwmResolution = doc["pumpPwmResolution"].as<int>();
-    reconfigPwm = true;
-  }
+  // Only accept duty from API; frequency and resolution are internal-only
+  bool dutyChanged = false;
   if (doc.containsKey("pumpPwmDuty")) {
     pumpPwmDuty = doc["pumpPwmDuty"].as<int>();
-    reconfigPwm = true;
+    dutyChanged = true;
   }
   if (doc.containsKey("sensorUpdateInterval")) sensorUpdateInterval = doc["sensorUpdateInterval"].as<unsigned long>();
   if (doc.containsKey("water_map") && doc["water_map"].is<JsonArray>()) {
@@ -87,17 +78,13 @@ void handleSettingsPost() {
     if (newmap.size() >= 2) waterMap = newmap;
   }
   saveCalibrationToPrefs();
-  // apply PWM reconfiguration if requested
-  if (reconfigPwm) {
+  // If duty changed, clamp to allowed range and force pumpTask to reapply duty
+  if (dutyChanged) {
     if (pumpPwmResolution < 1) pumpPwmResolution = 1;
     if (pumpPwmResolution > 15) pumpPwmResolution = 15;
-    if (pumpPwmFreq <= 0) pumpPwmFreq = 5000;
     int maxDuty = (1 << pumpPwmResolution) - 1;
     if (pumpPwmDuty < 0) pumpPwmDuty = 0;
     if (pumpPwmDuty > maxDuty) pumpPwmDuty = maxDuty;
-    // switch to pin-based attach exposed by this core
-    ledcAttach(PUMP_PIN, pumpPwmFreq, pumpPwmResolution);
-    // clear lastAppliedDuty to force pumpTask to reapply duty if needed
     lastAppliedDuty = -1;
   }
   UNLOCK_STATE();
@@ -236,6 +223,7 @@ void startWebRoutes() {
     doc["soilWetRaw"] = soilWetRaw;
     doc["wateringThreshold"] = wateringThreshold;
     doc["pumpDurationMs"] = pumpDurationMs;
+  doc["pumpPwmDuty"] = pumpPwmDuty;
     doc["sensorUpdateInterval"] = sensorUpdateInterval;
   doc["last_soil_raw"] = lastSoilRaw;
   doc["last_water_raw"] = lastWaterRaw;

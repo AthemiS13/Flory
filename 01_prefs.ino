@@ -12,8 +12,6 @@ void saveCalibrationToPrefs() {
   doc["soilDryRaw"] = soilDryRaw;
   doc["soilWetRaw"] = soilWetRaw;
   doc["wateringThreshold"] = wateringThreshold;
-  doc["pumpPwmFreq"] = pumpPwmFreq;
-  doc["pumpPwmResolution"] = pumpPwmResolution;
   doc["pumpPwmDuty"] = pumpPwmDuty;
   doc["sensorUpdateInterval"] = sensorUpdateInterval;
   String s;
@@ -35,8 +33,6 @@ void loadCalibrationFromPrefs() {
   if (doc.containsKey("soilDryRaw")) soilDryRaw = (uint16_t)doc["soilDryRaw"].as<int>();
   if (doc.containsKey("soilWetRaw")) soilWetRaw = (uint16_t)doc["soilWetRaw"].as<int>();
   if (doc.containsKey("wateringThreshold")) wateringThreshold = doc["wateringThreshold"].as<float>();
-  if (doc.containsKey("pumpPwmFreq")) pumpPwmFreq = doc["pumpPwmFreq"].as<int>();
-  if (doc.containsKey("pumpPwmResolution")) pumpPwmResolution = doc["pumpPwmResolution"].as<int>();
   if (doc.containsKey("pumpPwmDuty")) pumpPwmDuty = doc["pumpPwmDuty"].as<int>();
   if (doc.containsKey("sensorUpdateInterval")) sensorUpdateInterval = doc["sensorUpdateInterval"].as<unsigned long>();
   if (doc["map"].is<JsonArray>()) {
