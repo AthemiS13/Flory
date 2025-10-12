@@ -1,6 +1,6 @@
 // Centralized configuration for the ESP32 host used by API routes.
 // Edit the default below or set ESP_HOST in the environment to override.
-export const ESP_HOST = process.env.ESP_HOST || '192.168.0.27';
+export const ESP_HOST = process.env.ESP_HOST || '192.168.0.14';
 export const ESP_BASE = `http://${ESP_HOST}`;
 
 export function espUrl(path: string) {
@@ -12,6 +12,7 @@ export const ENDPOINTS = {
   settings: '/api/settings',
   pump: '/api/pump',
   status: '/api/status',
+  calibration: '/api/calibration',
 };
 
 // Convenience wrapper used by some routes — keeps a single place to change how

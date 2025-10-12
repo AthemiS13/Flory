@@ -18,3 +18,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
+
+export async function GET() {
+  try {
+    const res = await fetch(espUrl(ENDPOINTS.settings));
+    if (!res.ok) {
+      return NextResponse.json({ error: 'Failed to fetch settings from ESP32' }, { status: 500 });
+    }
+    const data = await res.json();
+    return NextResponse.json(data);
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
