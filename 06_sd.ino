@@ -141,26 +141,30 @@ void sdTest() {
 // - Files are streamed directly to SD to avoid holding them in RAM.
 // - This intentionally avoids any handshake or complex protocol.
 void sdHandleUpload(HTTPUpload &upload) {
+  static File currentUploadFile;
+  static String currentUploadPath = "";
+
   String filename = upload.filename;
   if (filename.length() == 0) return; // nothing to do
-  // Ensure uploads go under /app. If caller provided an absolute path
-  // not under /app, normalize to /app/<path>. If filename already
-  // starts with "/app" keep it. Otherwise prefix "/app".
+  // Normalize and ensure path is under /app
   if (!filename.startsWith("/")) filename = String("/") + filename;
   if (!filename.startsWith("/app/") && filename != "/app") {
-    // prepend /app
-    // avoid double slash when filename == "/"
     if (filename == "/") filename = String("/app/");
     else filename = String("/app") + filename;
   }
 
   if (upload.status == UPLOAD_FILE_START) {
     Serial.printf("Upload start: %s\n", filename.c_str());
+    // close any previous lingering file
+    if (currentUploadFile) {
+      currentUploadFile.close();
+      currentUploadFile = File();
+      currentUploadPath = "";
+    }
     // ensure directories exist for the incoming file
     int lastSlash = filename.lastIndexOf('/');
     if (lastSlash > 0) {
       String dir = filename.substring(0, lastSlash);
-      // iterate components and create as needed
       String accum = "";
       int start = 1; // skip leading /
       while (start < dir.length()) {
@@ -173,23 +177,36 @@ void sdHandleUpload(HTTPUpload &upload) {
         start = nextSlash + 1;
       }
     }
-    // create or truncate target file
-    File f = SD.open(filename.c_str(), FILE_WRITE);
-    if (f) f.close();
+    // open (truncate) once and keep the File open across callbacks
+    currentUploadFile = SD.open(filename.c_str(), FILE_WRITE);
+    if (!currentUploadFile) {
+      Serial.printf("Failed to open %s for writing\n", filename.c_str());
+    } else {
+      currentUploadPath = filename;
+    }
   } else if (upload.status == UPLOAD_FILE_WRITE) {
-    // stream append chunk
-    File f = SD.open(filename.c_str(), FILE_APPEND);
-    if (f) {
-      f.write(upload.buf, upload.currentSize);
-      f.close();
+    if (!currentUploadFile) {
+      // fallback: try to open for append
+      currentUploadFile = SD.open(filename.c_str(), FILE_APPEND);
+      if (currentUploadFile) currentUploadPath = filename;
+    }
+    if (currentUploadFile) {
+      size_t written = currentUploadFile.write(upload.buf, upload.currentSize);
+      if (written != upload.currentSize) {
+        Serial.printf("Warning: wrote %u of %u bytes to %s\n", (unsigned)written, (unsigned)upload.currentSize, filename.c_str());
+      }
+      // Yield to the RTOS / WiFi stack to avoid watchdog
+      delay(0);
     } else {
       Serial.printf("Failed to append to %s\n", filename.c_str());
     }
   } else if (upload.status == UPLOAD_FILE_END) {
+    // close file if it matches
+    if (currentUploadFile) {
+      currentUploadFile.close();
+      currentUploadFile = File();
+      currentUploadPath = "";
+    }
     Serial.printf("Upload complete: %s (%u bytes)\n", filename.c_str(), upload.totalSize);
-    // if upload finished for a file, we don't reset sd_upload_started because
-    // subsequent files in the same session are expected to be part of the same
-    // drag-and-drop operation. Callers may reset sd_upload_started when appropriate
-    // (for example after the HTTP request ends).
   }
 }
