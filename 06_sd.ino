@@ -8,6 +8,12 @@
 // Chip select pin for SD card (D4 on many ESP32 boards)
 const int SD_CS_PIN = 4;
 
+// Provide an explicit API to wipe /app contents. Callers (network) should
+// invoke `sdWipeApp()` when a manual wipe is requested.
+void sdWipeApp() {
+  sdWipeDirContents("/app");
+}
+
 // Initialize the SD card. Returns true on success.
 bool sdInit() {
   if (!SD.begin(SD_CS_PIN)) {
@@ -15,6 +21,13 @@ bool sdInit() {
     return false;
   }
   Serial.println("SD initialized.");
+  // Ensure root folders exist
+  if (!SD.exists("/app")) {
+    SD.mkdir("/app");
+  }
+  if (!SD.exists("/log")) {
+    SD.mkdir("/log");
+  }
   return true;
 }
 
@@ -77,6 +90,40 @@ void sdListDir(const char* dirname) {
   root.close();
 }
 
+// Recursively remove a directory's contents but leave the directory itself.
+// Used to wipe /app contents quickly.
+void sdWipeDirContents(const char *dirname) {
+  File dir = SD.open(dirname);
+  if (!dir) return;
+  if (!dir.isDirectory()) { dir.close(); return; }
+  File entry = dir.openNextFile();
+  while (entry) {
+    String childName = String(entry.name());
+    // Build full path for child. Some SD implementations return a full
+    // path from entry.name(), others return a short name. Normalize both.
+    String childPath;
+    if (childName.startsWith("/")) {
+      childPath = childName;
+    } else {
+      childPath = String(dirname);
+      if (!childPath.endsWith("/")) childPath += "/";
+      childPath += childName;
+    }
+
+    if (entry.isDirectory()) {
+      // recurse into subdir
+      sdWipeDirContents(childPath.c_str());
+      // remove the subdir itself
+      SD.rmdir(childPath.c_str());
+    } else {
+      SD.remove(childPath.c_str());
+    }
+    entry.close();
+    entry = dir.openNextFile();
+  }
+  dir.close();
+}
+
 // Quick test function: init SD, write and read /test.txt and list root
 void sdTest() {
   if (!sdInit()) return;
@@ -85,37 +132,52 @@ void sdTest() {
   sdListDir("/");
 }
 
-// Handle HTTP multipart upload chunks and write to SD
-// Expects upload.filename to contain desired path (e.g., "out/index.html" or "index.html")
+// Brute-force upload handler for emergency drag&drop.
+// Behavior:
+// - The first incoming file (UPLOAD_FILE_START) will trigger wiping all contents
+//   of `/app` (but keep the `/app` directory itself). This is intentional.
+// - upload.filename should be the path relative to the SD root (e.g. "index.html"
+//   or "_next/static/..." or "/index.html"). Leading slash is optional.
+// - Files are streamed directly to SD to avoid holding them in RAM.
+// - This intentionally avoids any handshake or complex protocol.
 void sdHandleUpload(HTTPUpload &upload) {
   String filename = upload.filename;
+  if (filename.length() == 0) return; // nothing to do
+  // Ensure uploads go under /app. If caller provided an absolute path
+  // not under /app, normalize to /app/<path>. If filename already
+  // starts with "/app" keep it. Otherwise prefix "/app".
   if (!filename.startsWith("/")) filename = String("/") + filename;
+  if (!filename.startsWith("/app/") && filename != "/app") {
+    // prepend /app
+    // avoid double slash when filename == "/"
+    if (filename == "/") filename = String("/app/");
+    else filename = String("/app") + filename;
+  }
 
   if (upload.status == UPLOAD_FILE_START) {
     Serial.printf("Upload start: %s\n", filename.c_str());
-    // create directories if needed
+    // ensure directories exist for the incoming file
     int lastSlash = filename.lastIndexOf('/');
     if (lastSlash > 0) {
       String dir = filename.substring(0, lastSlash);
-      // simple recursive mkdir: iterate components
+      // iterate components and create as needed
       String accum = "";
       int start = 1; // skip leading /
       while (start < dir.length()) {
         int nextSlash = dir.indexOf('/', start);
         if (nextSlash == -1) nextSlash = dir.length();
         accum += "/" + dir.substring(start, nextSlash);
-        File d = SD.open(accum.c_str());
-        if (!d) {
-          // try to create directory
+        if (!SD.exists(accum.c_str())) {
           SD.mkdir(accum.c_str());
-        } else d.close();
+        }
         start = nextSlash + 1;
       }
     }
-    // open (truncate) file
+    // create or truncate target file
     File f = SD.open(filename.c_str(), FILE_WRITE);
     if (f) f.close();
   } else if (upload.status == UPLOAD_FILE_WRITE) {
+    // stream append chunk
     File f = SD.open(filename.c_str(), FILE_APPEND);
     if (f) {
       f.write(upload.buf, upload.currentSize);
@@ -125,5 +187,9 @@ void sdHandleUpload(HTTPUpload &upload) {
     }
   } else if (upload.status == UPLOAD_FILE_END) {
     Serial.printf("Upload complete: %s (%u bytes)\n", filename.c_str(), upload.totalSize);
+    // if upload finished for a file, we don't reset sd_upload_started because
+    // subsequent files in the same session are expected to be part of the same
+    // drag-and-drop operation. Callers may reset sd_upload_started when appropriate
+    // (for example after the HTTP request ends).
   }
 }

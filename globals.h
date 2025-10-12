@@ -55,7 +55,13 @@ extern String otaHostname;
 extern String otaPassword;
 
 // SD upload handler (defined in 06_sd.ino)
+// NOTE: this project uses a simple, brute-force upload handler intended for
+// emergency drag-and-drop. The handler accepts an HTTPUpload& and streams
+// files directly to the SD card. A global flag `sd_upload_started` is used
+// to mark the first-file event that triggers wiping `/app` contents.
 void sdHandleUpload(HTTPUpload &upload);
+// Explicit wipe API for /app
+void sdWipeApp();
 
 extern Preferences prefs;
 extern const char* PREF_NAMESPACE;

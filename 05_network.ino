@@ -1,4 +1,5 @@
 // -------------------- HTTP handlers --------------------
+#include "globals.h"
 #include <ESPmDNS.h>
 void handleStatus() {
   DynamicJsonDocument doc(256);
@@ -159,10 +160,10 @@ bool handleFileRead() {
   if (path.endsWith("/")) path += "index.html";
   Serial.printf("Web request for: %s\n", path.c_str());
 
-  // Try a few candidate locations on the SD card. Common mistake: user copies
-  // the entire `out` folder to the SD root, resulting in files at /out/index.html
-  const char* candidates[] = { nullptr, "/out" };
-  for (int i = 0; i < 2; ++i) {
+  // Try a few candidate locations on the SD card. Prefer `/app` where
+  // the emergency uploader writes files. Fallback to root or `/out`.
+  const char* candidates[] = { "/app", nullptr, "/out" };
+  for (int i = 0; i < 3; ++i) {
     String candidatePath;
     if (candidates[i]) candidatePath = String(candidates[i]) + path;
     else candidatePath = path;
@@ -226,6 +227,17 @@ void startWebRoutes() {
   }, []() {
     HTTPUpload& upload = server.upload();
     sdHandleUpload(upload);
+  });
+
+  // Explicit wipe endpoint: POST /sd/wipe?force=1 will remove all files under /app
+  server.on("/sd/wipe", HTTP_POST, []() {
+    // require explicit force to avoid accidental wipes
+    if (!(server.hasArg("force") && server.arg("force") == "1")) {
+      server.send(400, "application/json", "{\"error\":\"missing force=1\"}");
+      return;
+    }
+    sdWipeApp();
+    server.send(200, "application/json", "{\"ok\":true}\n");
   });
   server.on("/api/settings", HTTP_GET, []() {
     DynamicJsonDocument doc(512);
