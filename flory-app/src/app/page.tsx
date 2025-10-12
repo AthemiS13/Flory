@@ -41,6 +41,8 @@ export default function Home() {
             if (sj.pumpPwmDuty !== undefined) setPumpPwmDuty(sj.pumpPwmDuty);
             if (sj.last_soil_raw !== undefined) setLastSoilRaw(sj.last_soil_raw);
             if (sj.last_water_raw !== undefined) setLastWaterRaw(sj.last_water_raw);
+            if (sj.otaHostname !== undefined) setOtaHostname(sj.otaHostname);
+            if (sj.otaPassword !== undefined) setOtaPassword(sj.otaPassword);
           }
         } catch (e) {
           // ignore
@@ -55,6 +57,8 @@ export default function Home() {
                     if (cj.last_water_raw !== undefined) setLastWaterRaw(cj.last_water_raw);
                     if (cj.pumpPwmDuty !== undefined) setPumpPwmDuty(cj.pumpPwmDuty);
             if (cj.water_map !== undefined && Array.isArray(cj.water_map)) setWaterMap(cj.water_map.map((m: any) => ({ raw: m.raw, percent: m.percent })));
+                    if (cj.otaHostname !== undefined) setOtaHostname(cj.otaHostname);
+                    if (cj.otaPassword !== undefined) setOtaPassword(cj.otaPassword);
           }
         } catch (e) {
           // ignore
@@ -88,6 +92,115 @@ export default function Home() {
   const [lastSoilRaw, setLastSoilRaw] = useState<number | null>(null);
   const [lastWaterRaw, setLastWaterRaw] = useState<number | null>(null);
   const [waterMap, setWaterMap] = useState<Array<{ raw: number; percent: number }>>([]);
+  // OTA / mDNS persisted settings
+  const [otaHostname, setOtaHostname] = useState<string | undefined>(undefined);
+  const [otaPassword, setOtaPassword] = useState<string | undefined>(undefined);
+
+  // File manager upload queue state
+  type UploadItem = {
+    file: File;
+    remotePath: string;
+    status: 'ready' | 'uploading' | 'done' | 'error';
+    progress: number;
+    error: string | null;
+  };
+  const [uploadQueue, setUploadQueue] = useState<UploadItem[]>([]);
+
+  async function uploadFile(idx: number) {
+    const item = uploadQueue[idx];
+    if (!item) return;
+    const q = [...uploadQueue];
+    q[idx] = { ...q[idx], status: 'uploading', progress: 0, error: null };
+    setUploadQueue(q);
+    try {
+      const fd = new FormData();
+      // include filename parameter per firmware expectations
+      fd.append('file', item.file, item.remotePath);
+      // Some implementations expect the filename as part of the content-disposition;
+      // using the third param to append sets the filename. Additionally set a field
+      // `filename` so servers that read form fields can see it.
+      fd.append('filename', item.remotePath);
+
+      const res = await fetch('/api/flory-sd-upload', { method: 'POST', body: fd });
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        q[idx] = { ...q[idx], status: 'error', error: `Upload failed: ${text}` };
+        setUploadQueue(q);
+        return;
+      }
+      const json = await res.json().catch(() => ({ ok: true }));
+      if (json && json.ok) {
+        q[idx] = { ...q[idx], status: 'done', progress: 100 };
+      } else {
+        q[idx] = { ...q[idx], status: 'error', error: JSON.stringify(json) };
+      }
+      setUploadQueue(q);
+    } catch (e: any) {
+      q[idx] = { ...q[idx], status: 'error', error: e.message };
+      setUploadQueue(q);
+    }
+  }
+
+  function uploadAll() {
+    // sequential upload to avoid hammering the device
+    (async function sequential() {
+      for (let i = 0; i < uploadQueue.length; i++) {
+        if (uploadQueue[i].status === 'ready' || uploadQueue[i].status === 'error') {
+          // eslint-disable-next-line no-await-in-loop
+          // refresh local index because uploadFile mutates state
+          // ensure we await before proceeding
+          // eslint-disable-next-line no-await-in-loop
+          await uploadFile(i);
+        }
+      }
+    })();
+  }
+
+  // Helper: convert DataTransferItemList to UploadItem[] recursively (supports folders)
+  async function itemsToUploadItems(items: DataTransferItemList | DataTransferItem[]) {
+    const results: UploadItem[] = [];
+
+    async function walk(entry: any, pathPrefix: string) {
+      if (!entry) return;
+      if (entry.isFile) {
+        const file: File = await new Promise((resolve, reject) => entry.file((f: File) => resolve(f), (err: any) => reject(err)));
+        const remotePath = pathPrefix ? `${pathPrefix}/${file.name}` : file.name;
+        results.push({ file, remotePath, status: 'ready', progress: 0, error: null });
+      } else if (entry.isDirectory) {
+        const reader = entry.createReader();
+        // readEntries may return entries in batches; loop until empty
+        let entries: any[] = [];
+        do {
+          entries = await new Promise<any[]>(resolve => reader.readEntries(resolve));
+          for (const e of entries) {
+            await walk(e, pathPrefix ? `${pathPrefix}/${entry.name}` : entry.name);
+          }
+        } while (entries.length > 0);
+      }
+    }
+
+    const list = Array.from(items as any);
+    for (const it of list) {
+      const item = it as any;
+      // Prefer webkitGetAsEntry (Chrome/Safari) to get directories
+      const entry = (item.webkitGetAsEntry && item.webkitGetAsEntry()) || (item.getAsEntry && item.getAsEntry && item.getAsEntry());
+      if (entry) {
+        // walk the entry recursively
+        // root path starts empty
+        await walk(entry, '');
+      } else {
+        // fallback for plain file items
+        try {
+          const f = item.getAsFile ? item.getAsFile() : (item as any) as File;
+          if (f) results.push({ file: f, remotePath: (f as any).webkitRelativePath || f.name, status: 'ready', progress: 0, error: null });
+        } catch (e) {
+          // ignore non-file entries
+        }
+      }
+    }
+
+    return results;
+  }
 
   // Pump control handlers
   async function handlePump(action: "start" | "stop") {
@@ -121,6 +234,9 @@ export default function Home() {
         sensorUpdateInterval: sensorInterval,
         pumpPwmDuty: pumpPwmDuty,
       };
+      // include OTA/mDNS persisted settings when provided
+      if (otaHostname !== undefined) bodyObj.otaHostname = otaHostname;
+      if (otaPassword !== undefined) bodyObj.otaPassword = otaPassword;
       if (soilDryRaw !== undefined) bodyObj.soilDryRaw = soilDryRaw;
       if (soilWetRaw !== undefined) bodyObj.soilWetRaw = soilWetRaw;
       if (wateringThreshold !== undefined) bodyObj.wateringThreshold = wateringThreshold;
@@ -279,6 +395,24 @@ export default function Home() {
               max={60000}
             />
           </label>
+          <label className="flex flex-col text-white">
+            <span className="mb-1">OTA Hostname (mDNS)</span>
+            <input
+              type="text"
+              className="bg-black border border-neutral-700 rounded px-2 py-1 text-white font-mono"
+              value={otaHostname ?? ''}
+              onChange={e => setOtaHostname(e.target.value === '' ? undefined : e.target.value)}
+            />
+          </label>
+          <label className="flex flex-col text-white">
+            <span className="mb-1">OTA Password</span>
+            <input
+              type="text"
+              className="bg-black border border-neutral-700 rounded px-2 py-1 text-white font-mono"
+              value={otaPassword ?? ''}
+              onChange={e => setOtaPassword(e.target.value === '' ? undefined : e.target.value)}
+            />
+          </label>
           <button
             type="submit"
             className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition disabled:opacity-50"
@@ -369,6 +503,8 @@ export default function Home() {
                     if (sj.last_soil_raw !== undefined) setLastSoilRaw(sj.last_soil_raw);
                     if (sj.last_water_raw !== undefined) setLastWaterRaw(sj.last_water_raw);
                     if (sj.water_map !== undefined && Array.isArray(sj.water_map)) setWaterMap(sj.water_map.map((m: any) => ({ raw: m.raw, percent: m.percent })));
+                    if (sj.otaHostname !== undefined) setOtaHostname(sj.otaHostname);
+                    if (sj.otaPassword !== undefined) setOtaPassword(sj.otaPassword);
                   }
                 } catch {}
                 try {
@@ -378,6 +514,8 @@ export default function Home() {
                     setCalibration(cj);
                     if (cj.last_soil_raw !== undefined) setLastSoilRaw(cj.last_soil_raw);
                     if (cj.last_water_raw !== undefined) setLastWaterRaw(cj.last_water_raw);
+                    if (cj.otaHostname !== undefined) setOtaHostname(cj.otaHostname);
+                    if (cj.otaPassword !== undefined) setOtaPassword(cj.otaPassword);
                   }
                 } catch {}
               }}
@@ -441,6 +579,60 @@ export default function Home() {
           </div>
         </div>
         {settingsError && <p className="text-red-400 mt-4 font-mono">{settingsError}</p>}
+      </div>
+
+      {/* File Manager (SD upload) */}
+      <div className="bg-neutral-900 border border-neutral-800 rounded-2xl shadow-xl p-8 w-full max-w-md mt-8">
+        <h2 className="text-xl font-bold text-white mb-4">File Manager — Upload to SD</h2>
+        <div
+          onDragOver={e => e.preventDefault()}
+          onDrop={async e => {
+              e.preventDefault();
+              try {
+                const items = e.dataTransfer?.items;
+                if (items && items.length > 0) {
+                  const list = await itemsToUploadItems(items);
+                  setUploadQueue(q => [...q, ...list]);
+                } else {
+                  const files = Array.from(e.dataTransfer?.files || []);
+                  const list: UploadItem[] = files.map(f => ({ file: f, remotePath: f.name, status: 'ready', progress: 0, error: null }));
+                  setUploadQueue(q => [...q, ...list]);
+                }
+              } catch (err) {
+                // fallback to plain files
+                const files = Array.from(e.dataTransfer?.files || []);
+                const list: UploadItem[] = files.map(f => ({ file: f, remotePath: f.name, status: 'ready', progress: 0, error: null }));
+                setUploadQueue(q => [...q, ...list]);
+              }
+            }}
+          className="border-2 border-dashed border-neutral-700 rounded p-6 text-center text-neutral-400 mb-4"
+        >
+          Drag & drop files here to upload to the device SD card
+        </div>
+
+        <div className="flex flex-col gap-2">
+          {uploadQueue.map((item, idx) => (
+            <div key={idx} className="flex items-center justify-between gap-2">
+              <div className="flex-1">
+                <div className="font-mono text-sm text-white">{item.file.name}</div>
+                <input className="bg-black border border-neutral-700 rounded px-2 py-1 mt-1 w-full text-white" value={item.remotePath}
+                  onChange={e => { const q = [...uploadQueue]; q[idx].remotePath = e.target.value; setUploadQueue(q); }}
+                />
+                {item.error && <div className="text-red-400 text-xs mt-1">{item.error}</div>}
+              </div>
+              <div className="w-36 text-right">
+                {item.status === 'ready' && <button className="bg-blue-600 text-white px-2 py-1 rounded" onClick={() => uploadFile(idx)}>Upload</button>}
+                {item.status === 'uploading' && <span className="text-sm text-neutral-400">{item.progress}%</span>}
+                {item.status === 'done' && <span className="text-green-400">Done</span>}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="flex gap-2 mt-4">
+          <button className="bg-green-600 text-black font-bold py-2 px-4 rounded" onClick={() => uploadAll()}>Upload All</button>
+          <button className="bg-gray-700 text-white font-bold py-2 px-4 rounded" onClick={() => setUploadQueue([])}>Clear</button>
+        </div>
       </div>
 
       <p className="mt-10 text-xs text-white/40 font-mono">Data fetched from Flory REST API</p>
