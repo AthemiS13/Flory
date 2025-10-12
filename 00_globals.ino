@@ -62,5 +62,9 @@ int pumpPwmDuty = 255;            // duty (0..(2^bits -1))
 Preferences prefs;
 const char* PREF_NAMESPACE = "smartpot_v1";
 
+// OTA / network settings (persisted)
+String otaHostname = "flory";
+String otaPassword = "";
+
 // -------------------- Server --------------------
 WebServer server(80);

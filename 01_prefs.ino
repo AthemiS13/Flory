@@ -13,6 +13,8 @@ void saveCalibrationToPrefs() {
   doc["soilWetRaw"] = soilWetRaw;
   doc["wateringThreshold"] = wateringThreshold;
   doc["pumpPwmDuty"] = pumpPwmDuty;
+  doc["otaHostname"] = otaHostname.c_str();
+  doc["otaPassword"] = otaPassword.c_str();
   doc["sensorUpdateInterval"] = sensorUpdateInterval;
   String s;
   serializeJson(doc, s);
@@ -34,6 +36,8 @@ void loadCalibrationFromPrefs() {
   if (doc.containsKey("soilWetRaw")) soilWetRaw = (uint16_t)doc["soilWetRaw"].as<int>();
   if (doc.containsKey("wateringThreshold")) wateringThreshold = doc["wateringThreshold"].as<float>();
   if (doc.containsKey("pumpPwmDuty")) pumpPwmDuty = doc["pumpPwmDuty"].as<int>();
+  if (doc.containsKey("otaHostname")) otaHostname = String((const char*)doc["otaHostname"]);
+  if (doc.containsKey("otaPassword")) otaPassword = String((const char*)doc["otaPassword"]);
   if (doc.containsKey("sensorUpdateInterval")) sensorUpdateInterval = doc["sensorUpdateInterval"].as<unsigned long>();
   if (doc["map"].is<JsonArray>()) {
     std::vector<CalPoint> newmap;

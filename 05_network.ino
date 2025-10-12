@@ -1,4 +1,5 @@
 // -------------------- HTTP handlers --------------------
+#include <ESPmDNS.h>
 void handleStatus() {
   DynamicJsonDocument doc(256);
   LOCK_STATE();
@@ -32,6 +33,8 @@ void handleCalibrationGet() {
   }
   doc["last_water_raw"] = lastWaterRaw;
   doc["last_soil_raw"] = lastSoilRaw;
+  doc["otaHostname"] = otaHostname.c_str();
+  doc["otaPassword"] = otaPassword.c_str();
   UNLOCK_STATE();
   String out;
   serializeJson(doc, out);
@@ -60,6 +63,8 @@ void handleSettingsPost() {
   if (doc.containsKey("soilWetRaw")) soilWetRaw = (uint16_t)doc["soilWetRaw"].as<int>();
   if (doc.containsKey("wateringThreshold")) wateringThreshold = doc["wateringThreshold"].as<float>();
   if (doc.containsKey("pumpDurationMs")) pumpDurationMs = doc["pumpDurationMs"].as<int>();
+  if (doc.containsKey("otaHostname")) otaHostname = String((const char*)doc["otaHostname"]);
+  if (doc.containsKey("otaPassword")) otaPassword = String((const char*)doc["otaPassword"]);
   // Only accept duty from API; frequency and resolution are internal-only
   bool dutyChanged = false;
   if (doc.containsKey("pumpPwmDuty")) {
@@ -215,6 +220,13 @@ void handleSdList() {
 void startWebRoutes() {
   server.on("/api/status", HTTP_GET, handleStatus);
   server.on("/api/calibration", HTTP_GET, handleCalibrationGet);
+  // SD upload endpoint (delegate to SD helper)
+  server.on("/sd/upload", HTTP_POST, []() {
+    server.send(200, "application/json", "{\"ok\":true}");
+  }, []() {
+    HTTPUpload& upload = server.upload();
+    sdHandleUpload(upload);
+  });
   server.on("/api/settings", HTTP_GET, []() {
     DynamicJsonDocument doc(512);
     LOCK_STATE();
@@ -246,8 +258,11 @@ void startWebRoutes() {
 }
 
 void startOTAwithPassword(const char* pwd = nullptr) {
-  ArduinoOTA.setHostname("smartpot-ota");
-  if (pwd && strlen(pwd) > 0) ArduinoOTA.setPassword(pwd);
+  // Use persisted hostname/password if provided
+  ArduinoOTA.setHostname(otaHostname.c_str());
+  const char* usePwd = pwd;
+  if ((usePwd == nullptr || strlen(usePwd) == 0) && otaPassword.length() > 0) usePwd = otaPassword.c_str();
+  if (usePwd && strlen(usePwd) > 0) ArduinoOTA.setPassword(usePwd);
   ArduinoOTA.onStart([]() {
     Serial.println("OTA start");
   });
@@ -283,6 +298,12 @@ void networkTask(void* parameter) {
   }
 
   startOTAwithPassword();
+  // start mDNS so the device is discoverable as <otaHostname>.local
+  if (MDNS.begin(otaHostname.c_str())) {
+    Serial.printf("mDNS responder started: %s.local\n", otaHostname.c_str());
+  } else {
+    Serial.println("mDNS start failed");
+  }
   startWebRoutes();
 
   while (true) {

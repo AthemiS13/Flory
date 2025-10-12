@@ -50,6 +50,13 @@ extern int pumpPwmFreq;
 extern int pumpPwmResolution;
 extern int pumpPwmDuty;
 
+// OTA / network settings
+extern String otaHostname;
+extern String otaPassword;
+
+// SD upload handler (defined in 06_sd.ino)
+void sdHandleUpload(HTTPUpload &upload);
+
 extern Preferences prefs;
 extern const char* PREF_NAMESPACE;
 

@@ -84,3 +84,46 @@ void sdTest() {
   sdReadText("/test.txt");
   sdListDir("/");
 }
+
+// Handle HTTP multipart upload chunks and write to SD
+// Expects upload.filename to contain desired path (e.g., "out/index.html" or "index.html")
+void sdHandleUpload(HTTPUpload &upload) {
+  String filename = upload.filename;
+  if (!filename.startsWith("/")) filename = String("/") + filename;
+
+  if (upload.status == UPLOAD_FILE_START) {
+    Serial.printf("Upload start: %s\n", filename.c_str());
+    // create directories if needed
+    int lastSlash = filename.lastIndexOf('/');
+    if (lastSlash > 0) {
+      String dir = filename.substring(0, lastSlash);
+      // simple recursive mkdir: iterate components
+      String accum = "";
+      int start = 1; // skip leading /
+      while (start < dir.length()) {
+        int nextSlash = dir.indexOf('/', start);
+        if (nextSlash == -1) nextSlash = dir.length();
+        accum += "/" + dir.substring(start, nextSlash);
+        File d = SD.open(accum.c_str());
+        if (!d) {
+          // try to create directory
+          SD.mkdir(accum.c_str());
+        } else d.close();
+        start = nextSlash + 1;
+      }
+    }
+    // open (truncate) file
+    File f = SD.open(filename.c_str(), FILE_WRITE);
+    if (f) f.close();
+  } else if (upload.status == UPLOAD_FILE_WRITE) {
+    File f = SD.open(filename.c_str(), FILE_APPEND);
+    if (f) {
+      f.write(upload.buf, upload.currentSize);
+      f.close();
+    } else {
+      Serial.printf("Failed to append to %s\n", filename.c_str());
+    }
+  } else if (upload.status == UPLOAD_FILE_END) {
+    Serial.printf("Upload complete: %s (%u bytes)\n", filename.c_str(), upload.totalSize);
+  }
+}
