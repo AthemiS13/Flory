@@ -9,8 +9,6 @@ type StatusData = {
   humidity: number;
   pump_on: boolean;
   // battery removed; no battery_percent
-  pumpPwmFreq?: number;
-  pumpPwmResolution?: number;
   pumpPwmDuty?: number;
 };
 
@@ -40,6 +38,7 @@ export default function Home() {
             if (sj.soilDryRaw !== undefined) setSoilDryRaw(sj.soilDryRaw);
             if (sj.soilWetRaw !== undefined) setSoilWetRaw(sj.soilWetRaw);
             if (sj.wateringThreshold !== undefined) setWateringThreshold(sj.wateringThreshold);
+            if (sj.pumpPwmDuty !== undefined) setPumpPwmDuty(sj.pumpPwmDuty);
             if (sj.last_soil_raw !== undefined) setLastSoilRaw(sj.last_soil_raw);
             if (sj.last_water_raw !== undefined) setLastWaterRaw(sj.last_water_raw);
           }
@@ -52,8 +51,9 @@ export default function Home() {
           if (cres.ok) {
             const cj = await cres.json();
             setCalibration(cj);
-            if (cj.last_soil_raw !== undefined) setLastSoilRaw(cj.last_soil_raw);
-            if (cj.last_water_raw !== undefined) setLastWaterRaw(cj.last_water_raw);
+                    if (cj.last_soil_raw !== undefined) setLastSoilRaw(cj.last_soil_raw);
+                    if (cj.last_water_raw !== undefined) setLastWaterRaw(cj.last_water_raw);
+                    if (cj.pumpPwmDuty !== undefined) setPumpPwmDuty(cj.pumpPwmDuty);
             if (cj.water_map !== undefined && Array.isArray(cj.water_map)) setWaterMap(cj.water_map.map((m: any) => ({ raw: m.raw, percent: m.percent })));
           }
         } catch (e) {
@@ -73,12 +73,12 @@ export default function Home() {
   // Control panel state
   const [pumpLoading, setPumpLoading] = useState(false);
   const [pumpError, setPumpError] = useState<string | null>(null);
+  const [restartLoading, setRestartLoading] = useState(false);
+  const [restartMessage, setRestartMessage] = useState<string | null>(null);
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [pumpDuration, setPumpDuration] = useState(3000);
   const [sensorInterval, setSensorInterval] = useState(1000);
-  const [pumpPwmFreq, setPumpPwmFreq] = useState(5000);
-  const [pumpPwmRes, setPumpPwmRes] = useState(8);
   const [pumpPwmDuty, setPumpPwmDuty] = useState(255);
 
   // Calibration/settings fields
@@ -119,8 +119,6 @@ export default function Home() {
       const bodyObj: any = {
         pumpDurationMs: pumpDuration,
         sensorUpdateInterval: sensorInterval,
-        pumpPwmFreq: pumpPwmFreq,
-        pumpPwmResolution: pumpPwmRes,
         pumpPwmDuty: pumpPwmDuty,
       };
       if (soilDryRaw !== undefined) bodyObj.soilDryRaw = soilDryRaw;
@@ -224,8 +222,30 @@ export default function Home() {
           >
             Stop Pump
           </button>
+          <button
+            className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded transition disabled:opacity-50"
+            onClick={async () => {
+              if (!confirm('Restart the device? This will briefly disconnect it.')) return;
+              setRestartLoading(true);
+              setRestartMessage(null);
+              try {
+                const res = await fetch('/api/flory-restart', { method: 'POST' });
+                if (!res.ok) throw new Error('Restart failed');
+                const json = await res.json();
+                setRestartMessage(JSON.stringify(json));
+              } catch (e: any) {
+                setRestartMessage(e.message ?? 'Restart error');
+              } finally {
+                setRestartLoading(false);
+              }
+            }}
+            disabled={restartLoading}
+          >
+            Restart Device
+          </button>
         </div>
         {pumpError && <p className="text-red-400 mb-4 font-mono">{pumpError}</p>}
+  {restartMessage && <p className="text-yellow-300 mb-4 font-mono">{restartMessage}</p>}
         <form onSubmit={handleSettings} className="flex flex-col gap-4">
           <label className="flex flex-col text-white">
             <span className="mb-1">Pump Duration (ms)</span>
@@ -236,28 +256,6 @@ export default function Home() {
               onChange={e => setPumpDuration(Number(e.target.value))}
               min={100}
               max={20000}
-            />
-          </label>
-          <label className="flex flex-col text-white">
-            <span className="mb-1">Pump PWM Frequency (Hz)</span>
-            <input
-              type="number"
-              className="bg-black border border-neutral-700 rounded px-2 py-1 text-white font-mono"
-              value={pumpPwmFreq}
-              onChange={e => setPumpPwmFreq(Number(e.target.value))}
-              min={1}
-              max={40000}
-            />
-          </label>
-          <label className="flex flex-col text-white">
-            <span className="mb-1">Pump PWM Resolution (bits)</span>
-            <input
-              type="number"
-              className="bg-black border border-neutral-700 rounded px-2 py-1 text-white font-mono"
-              value={pumpPwmRes}
-              onChange={e => setPumpPwmRes(Number(e.target.value))}
-              min={1}
-              max={15}
             />
           </label>
           <label className="flex flex-col text-white">
