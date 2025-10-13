@@ -1,9 +1,3 @@
-Great — below is a complete, developer-friendly reference you can hand to the webapp team. It covers every HTTP endpoint, request/response shapes, SD upload behavior, persisted prefs, log format, behavior of the automated watering (deadzone, time requirements), and helpful integration notes and examples.
-
-Use this as the canonical API + behavior doc for the Flory / Smart-Pot device.
-
----
-
 ## Flory (Smart-Pot) Device — API & Integration Reference
 
 Summary
@@ -149,14 +143,13 @@ Static file serving
 
 Path: `/log/log.txt` (single file strategy)
 - Each log entry is a single CSV line appended at the interval `loggingIntervalMs` (default 60000 ms).
-- Line format:
-  timestamp,soilPercent,soilRaw,waterPercent,waterRaw,temp,hum,pumpOn,timeSynced
-- Field meanings:
+Line format:
+  timestamp,soilPercent,waterPercent,temp,hum,pumpOn,timeSynced
+Note: the firmware writes a CSV header row to `/log/log.txt` whenever the file is created or truncated. Parsers should skip the first line if present.
+Field meanings:
   - timestamp: "YYYY-MM-DD HH:MM:SS" when NTP/time available, otherwise "ms:<millis>"
-  - soilPercent: float 0..100
-  - soilRaw: integer ADC raw reading
-  - waterPercent: float 0..100 (mapped from touch)
-  - waterRaw: int (raw touch sensor)
+  - soilPercent: float 0..100 (computed from calibrated mapping; no raw ADC value is logged)
+  - waterPercent: float 0..100 (mapped from touch sensor; raw touch values are not logged)
   - temp: float temperature in °C (if available)
   - hum: float humidity % (if available)
   - pumpOn: 1 if pump currently on, 0 otherwise
@@ -164,6 +157,7 @@ Path: `/log/log.txt` (single file strategy)
 - Rollover behavior:
   - When the device detects a month change (based on local time) it truncates `/log/log.txt` so the new month starts with an empty `log.txt`.
   - You can force truncation with `POST /api/logs/rollover`.
+  - Logs persist across device restarts and power cycles. The firmware will not delete or rotate existing `/log` files on boot; truncation happens only on month rollover (when accurate time is available) or when `/api/logs/rollover` is invoked.
 
 Notes on reliability & wear:
 - Default `loggingIntervalMs` is 60s to reduce SD wear.
@@ -351,12 +345,3 @@ curl -X POST -F "file=@app/index.html" http://DEVICE_IP/sd/upload
 - Implement archive mode (move previous `log.txt` to `/log/archive/YYYY-MM.txt` rather than truncating).
 - Add authentication for settings/pump endpoints or a simple token header.
 - Add `/api/logs` paged HTTP endpoint instead of serving raw SD file.
-
----
-
-If you want, I can now:
-- Create a single Markdown file `API.md` in the repository with this documentation.
-- Add example React hooks/components that call these endpoints (settings form, pump controls, log viewer).
-- Implement any of the optional enhancements above.
-
-Which one should I do next?

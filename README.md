@@ -46,8 +46,10 @@ See `API.md` or the full `README` in the repo for details and JSON examples.
 
 ## Logs
 - Single file: `/log/log.txt`
-- CSV format per line: `timestamp,soilPercent,soilRaw,waterPercent,waterRaw,temp,hum,pumpOn,timeSynced`
-- Device truncates `log.txt` at month rollover (and provides `POST /api/logs/rollover` to test truncation immediately)
+CSV format per line: `timestamp,soilPercent,waterPercent,temp,hum,pumpOn,timeSynced`
+The firmware writes a CSV header row to `/log/log.txt` when the file is created or truncated, so parsers can rely on column order.
+Device truncates `log.txt` at month rollover (and provides `POST /api/logs/rollover` to test truncation immediately)
+Logs persist across device restarts and power cycles; the firmware will not delete or rotate existing log files on boot. Truncation happens only on month rollover (when time is known) or when `/api/logs/rollover` is called.
 
 ---
 

@@ -155,28 +155,34 @@ void sensorTask(void* pvParameters) {
         timeSynced = true;
       }
 
-      // If month changed since last log (and we know time), truncate the main log file
-      if (timeSynced && (y != curLogYear || m != curLogMonth)) {
-        Serial.printf("Month rollover detected: truncating /log/log.txt for new month %04d-%02d\n", y, m);
-        sdTruncateLogFile();
-        curLogYear = y;
-        curLogMonth = m;
+      // If we have time, only truncate when the month actually changes.
+      // On first run after boot curLogYear/curLogMonth are zero: in that case
+      // initialize them without truncating so we don't wipe same-month logs on restart.
+      if (timeSynced) {
+        if (curLogYear == 0 && curLogMonth == 0) {
+          // first init after boot — remember current month but do not truncate
+          curLogYear = y;
+          curLogMonth = m;
+        } else if (y != curLogYear || m != curLogMonth) {
+          Serial.printf("Month rollover detected: truncating /log/log.txt for new month %04d-%02d\n", y, m);
+          sdTruncateLogFile();
+          curLogYear = y;
+          curLogMonth = m;
+        }
       }
 
-      // build CSV line: timestamp,soilPercent,soilRaw,waterPercent,waterRaw,temp,hum,pumpOn
+  // build CSV line: timestamp,soilPercent,waterPercent,temp,hum,pumpOn,timeSynced
       LOCK_STATE();
       bool pstate = pumpState;
       float spercent = lastSoilPercent;
-      uint16_t sraw = lastSoilRaw;
       float wpercent = lastWaterPercent;
-      uint16_t wraw = lastWaterRaw;
       float t = lastTemp;
       float h = lastHum;
       UNLOCK_STATE();
 
       char line[256];
-      // Add timeSynced flag (1 = exact NTP time, 0 = unknown/approx)
-      int len = snprintf(line, sizeof(line), "%s,%.1f,%u,%.1f,%u,%.1f,%.1f,%d,%d", timestr, spercent, (unsigned)sraw, wpercent, (unsigned)wraw, t, h, pstate ? 1 : 0, timeSynced ? 1 : 0);
+  // Add timeSynced flag (1 = exact NTP time, 0 = unknown/approx)
+  int len = snprintf(line, sizeof(line), "%s,%.1f,%.1f,%.1f,%.1f,%d,%d", timestr, spercent, wpercent, t, h, pstate ? 1 : 0, timeSynced ? 1 : 0);
       if (len > 0) {
         // append by opening FILE_WRITE (sdWriteText uses FILE_WRITE and println)
         String content = String(line);

@@ -29,39 +29,8 @@ bool sdInit() {
   if (!SD.exists("/log")) {
     SD.mkdir("/log");
   }
-  // Attempt to rotate logs to keep only the current month file if time is available
-  struct tm timeinfo;
-  if (getLocalTime(&timeinfo, 0)) {
-    int keepYear = timeinfo.tm_year + 1900;
-    int keepMonth = timeinfo.tm_mon + 1;
-    // iterate files in /log and remove those not matching current year+month
-    File dir = SD.open("/log");
-    if (dir && dir.isDirectory()) {
-      File file = dir.openNextFile();
-      while (file) {
-        String name = String(file.name());
-        // normalize base name: strip leading path components
-        int lastSlash = name.lastIndexOf('/');
-        String base = (lastSlash >= 0) ? name.substring(lastSlash + 1) : name;
-        // accept both zero-padded and non-padded month filenames
-        bool keep = false;
-        String pat1 = String(keepYear) + "-" + (keepMonth < 10 ? "0" : "") + String(keepMonth);
-        String pat2 = String(keepYear) + "-" + String(keepMonth);
-        if (base.startsWith(pat1) || base.startsWith(pat2)) keep = true;
-        if (!keep) {
-          String fullpath = name.startsWith("/") ? name : String("/log/") + base;
-          if (file.isDirectory()) {
-            sdWipeDirContents(fullpath.c_str());
-            SD.rmdir(fullpath.c_str());
-          } else {
-            SD.remove(fullpath.c_str());
-          }
-        }
-        file = dir.openNextFile();
-      }
-      dir.close();
-    }
-  }
+  // Keep any existing log files intact on boot. Rollover/truncation is handled
+  // by the sensor task when it detects a month change (after NTP time is available).
   return true;
 }
 
@@ -73,7 +42,15 @@ bool sdWriteText(const char* path, const String &content) {
     Serial.printf("Failed to open %s for writing\n", path);
     return false;
   }
+  // Append the content. Header row is written only when the file is created
+  // or explicitly truncated (sdTruncateLogFile()). Writing the header here
+  // caused repeated header lines in some SD implementations.
   file.println(content);
+  // Ensure data is flushed to the card promptly to reduce partial-line cases
+  // if a reboot/power-cycle occurs shortly after writing.
+  #if defined(ARDUINO_ARCH_ESP32)
+  file.flush();
+  #endif
   file.close();
   Serial.printf("Wrote to %s\n", path);
   return true;
@@ -117,7 +94,14 @@ void sdTruncateLogFile() {
   f.close();
   SD.remove("/log/log.txt");
   File f2 = SD.open("/log/log.txt", FILE_WRITE);
-  if (f2) f2.close();
+  if (f2) {
+    // write header row to newly-created log
+    f2.println("timestamp,soilPercent,waterPercent,temp,hum,pumpOn,timeSynced");
+    #if defined(ARDUINO_ARCH_ESP32)
+    f2.flush();
+    #endif
+    f2.close();
+  }
   Serial.println("Truncated /log/log.txt");
 }
 

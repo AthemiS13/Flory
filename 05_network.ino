@@ -162,8 +162,6 @@ String getContentType(const String &filename) {
   if (filename.endsWith(".csv")) return "text/csv";
   return "application/octet-stream";
 }
-
-// Try to serve a file from SD matching the request URI. Returns true if served.
 bool handleFileRead() {
   String path = server.uri();
   if (path == "/") path = "/index.html";
