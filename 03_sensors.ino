@@ -60,6 +60,8 @@ void sensorTask(void* pvParameters) {
   (void)pvParameters;
   Serial.println("Sensor task started on core 1");
   unsigned long lastLogMs = 0;
+  int curLogYear = 0;
+  int curLogMonth = 0;
   for (;;) {
     // Read raw once and compute percent from it to keep values consistent
     float soilRaw = readSoilRaw();
@@ -90,13 +92,18 @@ void sensorTask(void* pvParameters) {
     // Automated watering logic: run only if enabled, not already auto-watering,
     // and soil percent is below threshold. Honor deadzone if configured.
     if (autoWaterEnabled) {
-      // get local hour; if time not available, proceed (fail-open)
+      // get local hour; require time to be available — do not trigger automated
+      // operation if the device doesn't know the time (fail-closed)
       struct tm timeinfo;
-      bool haveTime = getLocalTime(&timeinfo, 0);
-      int hour = haveTime ? timeinfo.tm_hour : -1;
+      bool haveTime = getLocalTime(&timeinfo, 2000); // wait up to 2s for time
+      if (!haveTime) {
+        // don't trigger auto-watering when time is unknown
+        Serial.println("Auto-watering skipped: local time not available");
+      } else {
+        int hour = timeinfo.tm_hour;
 
-      bool inDeadzone = false;
-      if (deadzoneEnabled && hour >= 0) {
+        bool inDeadzone = false;
+        if (deadzoneEnabled && hour >= 0) {
         uint8_t s = deadzoneStartHour;
         uint8_t e = deadzoneEndHour;
         if (s <= e) {
@@ -113,12 +120,13 @@ void sensorTask(void* pvParameters) {
       float curSoil = lastSoilPercent;
       UNLOCK_STATE();
 
-      if (!inDeadzone && !alreadyAuto && curSoil < wateringThreshold) {
+        if (!inDeadzone && !alreadyAuto && curSoil < wateringThreshold) {
         // start auto pump
         LOCK_STATE();
         pumpAutoUntil = millis() + (unsigned long)pumpDurationMs;
         UNLOCK_STATE();
         Serial.printf("Auto-watering triggered: soil=%.1f < threshold=%.1f\n", curSoil, wateringThreshold);
+      }
       }
     }
 
@@ -135,13 +143,24 @@ void sensorTask(void* pvParameters) {
         snprintf(timestr, sizeof(timestr), "ms:%lu", nowMs);
       }
 
-      // prepare log file name YYYY-MM.txt
+      // Use single log file /log/log.txt. If the month rolled over, truncate it.
       char fname[32];
+      snprintf(fname, sizeof(fname), "/log/log.txt");
+      int y = 0;
+      int m = 0;
+      bool timeSynced = false;
       if (getLocalTime(&timeinfo, 1000)) {
-        snprintf(fname, sizeof(fname), "/log/%04d-%02d.txt", timeinfo.tm_year + 1900, timeinfo.tm_mon + 1);
-      } else {
-        // fallback to a generic log file
-        snprintf(fname, sizeof(fname), "/log/unknown.txt");
+        y = timeinfo.tm_year + 1900;
+        m = timeinfo.tm_mon + 1;
+        timeSynced = true;
+      }
+
+      // If month changed since last log (and we know time), truncate the main log file
+      if (timeSynced && (y != curLogYear || m != curLogMonth)) {
+        Serial.printf("Month rollover detected: truncating /log/log.txt for new month %04d-%02d\n", y, m);
+        sdTruncateLogFile();
+        curLogYear = y;
+        curLogMonth = m;
       }
 
       // build CSV line: timestamp,soilPercent,soilRaw,waterPercent,waterRaw,temp,hum,pumpOn
@@ -156,7 +175,8 @@ void sensorTask(void* pvParameters) {
       UNLOCK_STATE();
 
       char line[256];
-      int len = snprintf(line, sizeof(line), "%s,%.1f,%u,%.1f,%u,%.1f,%.1f,%d", timestr, spercent, (unsigned)sraw, wpercent, (unsigned)wraw, t, h, pstate ? 1 : 0);
+      // Add timeSynced flag (1 = exact NTP time, 0 = unknown/approx)
+      int len = snprintf(line, sizeof(line), "%s,%.1f,%u,%.1f,%u,%.1f,%.1f,%d,%d", timestr, spercent, (unsigned)sraw, wpercent, (unsigned)wraw, t, h, pstate ? 1 : 0, timeSynced ? 1 : 0);
       if (len > 0) {
         // append by opening FILE_WRITE (sdWriteText uses FILE_WRITE and println)
         String content = String(line);

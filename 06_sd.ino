@@ -4,6 +4,7 @@
 
 #include <SD.h>
 #include <SPI.h>
+#include <time.h>
 
 // Chip select pin for SD card (D4 on many ESP32 boards)
 const int SD_CS_PIN = 4;
@@ -31,22 +32,29 @@ bool sdInit() {
   // Attempt to rotate logs to keep only the current month file if time is available
   struct tm timeinfo;
   if (getLocalTime(&timeinfo, 0)) {
-    char keep[16];
-    snprintf(keep, sizeof(keep), "/log/%04d-%02d.txt", timeinfo.tm_year + 1900, timeinfo.tm_mon + 1);
-    // iterate files in /log and remove those not matching keep
+    int keepYear = timeinfo.tm_year + 1900;
+    int keepMonth = timeinfo.tm_mon + 1;
+    // iterate files in /log and remove those not matching current year+month
     File dir = SD.open("/log");
     if (dir && dir.isDirectory()) {
       File file = dir.openNextFile();
       while (file) {
         String name = String(file.name());
-        String full = name.startsWith("/") ? name : String("/") + name;
-        if (full != String(keep)) {
-          // remove file or directory
+        // normalize base name: strip leading path components
+        int lastSlash = name.lastIndexOf('/');
+        String base = (lastSlash >= 0) ? name.substring(lastSlash + 1) : name;
+        // accept both zero-padded and non-padded month filenames
+        bool keep = false;
+        String pat1 = String(keepYear) + "-" + (keepMonth < 10 ? "0" : "") + String(keepMonth);
+        String pat2 = String(keepYear) + "-" + String(keepMonth);
+        if (base.startsWith(pat1) || base.startsWith(pat2)) keep = true;
+        if (!keep) {
+          String fullpath = name.startsWith("/") ? name : String("/log/") + base;
           if (file.isDirectory()) {
-            sdWipeDirContents(full.c_str());
-            SD.rmdir(full.c_str());
+            sdWipeDirContents(fullpath.c_str());
+            SD.rmdir(fullpath.c_str());
           } else {
-            SD.remove(full.c_str());
+            SD.remove(fullpath.c_str());
           }
         }
         file = dir.openNextFile();
@@ -59,7 +67,8 @@ bool sdInit() {
 
 // Write a text file to SD. Returns true on success.
 bool sdWriteText(const char* path, const String &content) {
-  File file = SD.open(path, FILE_WRITE);
+  // Use FILE_APPEND to ensure we append to existing logs instead of truncating
+  File file = SD.open(path, FILE_APPEND);
   if (!file) {
     Serial.printf("Failed to open %s for writing\n", path);
     return false;
@@ -68,6 +77,48 @@ bool sdWriteText(const char* path, const String &content) {
   file.close();
   Serial.printf("Wrote to %s\n", path);
   return true;
+}
+
+// Wipe all files under /log but keep the /log directory itself
+void sdWipeLogs() {
+  if (!SD.exists("/log")) return;
+  File dir = SD.open("/log");
+  if (!dir || !dir.isDirectory()) return;
+  File file = dir.openNextFile();
+  while (file) {
+    String childName = String(file.name());
+    String childPath = childName.startsWith("/") ? childName : String("/log/") + childName;
+    // keep the main log file `log.txt` when doing a full wipe unless explicitly wanted
+    if (childPath == String("/log/log.txt")) {
+      file = dir.openNextFile();
+      continue;
+    }
+    if (file.isDirectory()) {
+      sdWipeDirContents(childPath.c_str());
+      SD.rmdir(childPath.c_str());
+    } else {
+      SD.remove(childPath.c_str());
+    }
+    file = dir.openNextFile();
+  }
+  dir.close();
+}
+
+// Truncate or create /log/log.txt (used as single-month log file)
+void sdTruncateLogFile() {
+  if (!SD.exists("/log")) SD.mkdir("/log");
+  // open for write (O_TRUNC) by using FILE_WRITE and then seek to 0+truncate
+  File f = SD.open("/log/log.txt", FILE_WRITE);
+  if (!f) {
+    Serial.println("Failed to open /log/log.txt for truncation");
+    return;
+  }
+  // Not all SD implementations support truncate(); remove and recreate instead
+  f.close();
+  SD.remove("/log/log.txt");
+  File f2 = SD.open("/log/log.txt", FILE_WRITE);
+  if (f2) f2.close();
+  Serial.println("Truncated /log/log.txt");
 }
 
 // Read a text file from SD and print to Serial. Returns true on success.
@@ -150,13 +201,7 @@ void sdWipeDirContents(const char *dirname) {
   dir.close();
 }
 
-// Quick test function: init SD, write and read /test.txt and list root
-void sdTest() {
-  if (!sdInit()) return;
-  sdWriteText("/test.txt", String("Hello from ESP32!"));
-  sdReadText("/test.txt");
-  sdListDir("/");
-}
+// (sdTest removed) Quick test function removed to prevent accidental writes.
 
 // Brute-force upload handler for emergency drag&drop.
 // Behavior:

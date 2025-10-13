@@ -273,6 +273,11 @@ void startWebRoutes() {
   });
   server.on("/sd/list", HTTP_GET, handleSdList);
   server.on("/api/settings", HTTP_POST, handleSettingsPost);
+  server.on("/api/logs/rollover", HTTP_POST, []() {
+    // force truncate the main log file (useful for testing)
+    sdTruncateLogFile();
+    server.send(200, "application/json", "{\"ok\":true}");
+  });
   server.on("/api/pump", HTTP_POST, handlePumpPost);
   server.on("/api/restart", HTTP_POST, handleRestart);
   server.onNotFound([]() {

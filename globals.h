@@ -71,6 +71,10 @@ extern String otaPassword;
 void sdHandleUpload(HTTPUpload &upload);
 // Explicit wipe API for /app
 void sdWipeApp();
+// Wipe all files under /log (keeps /log directory)
+void sdWipeLogs();
+// Truncate or recreate the main log file (/log/log.txt)
+void sdTruncateLogFile();
 
 extern Preferences prefs;
 extern const char* PREF_NAMESPACE;
