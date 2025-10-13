@@ -25,6 +25,11 @@ void handleCalibrationGet() {
   doc["wateringThreshold"] = wateringThreshold;
   doc["pumpDurationMs"] = pumpDurationMs;
   doc["pumpPwmDuty"] = pumpPwmDuty;
+  doc["autoWaterEnabled"] = autoWaterEnabled;
+  doc["deadzoneEnabled"] = deadzoneEnabled;
+  doc["deadzoneStartHour"] = deadzoneStartHour;
+  doc["deadzoneEndHour"] = deadzoneEndHour;
+  doc["loggingIntervalMs"] = loggingIntervalMs;
   doc["sensorUpdateInterval"] = sensorUpdateInterval;
   JsonArray arr = doc.createNestedArray("water_map");
   for (auto& p : waterMap) {
@@ -64,6 +69,11 @@ void handleSettingsPost() {
   if (doc.containsKey("soilWetRaw")) soilWetRaw = (uint16_t)doc["soilWetRaw"].as<int>();
   if (doc.containsKey("wateringThreshold")) wateringThreshold = doc["wateringThreshold"].as<float>();
   if (doc.containsKey("pumpDurationMs")) pumpDurationMs = doc["pumpDurationMs"].as<int>();
+  if (doc.containsKey("autoWaterEnabled")) autoWaterEnabled = doc["autoWaterEnabled"].as<bool>();
+  if (doc.containsKey("deadzoneEnabled")) deadzoneEnabled = doc["deadzoneEnabled"].as<bool>();
+  if (doc.containsKey("deadzoneStartHour")) deadzoneStartHour = (uint8_t)doc["deadzoneStartHour"].as<int>();
+  if (doc.containsKey("deadzoneEndHour")) deadzoneEndHour = (uint8_t)doc["deadzoneEndHour"].as<int>();
+  if (doc.containsKey("loggingIntervalMs")) loggingIntervalMs = doc["loggingIntervalMs"].as<unsigned long>();
   if (doc.containsKey("otaHostname")) otaHostname = String((const char*)doc["otaHostname"]);
   if (doc.containsKey("otaPassword")) otaPassword = String((const char*)doc["otaPassword"]);
   // Only accept duty from API; frequency and resolution are internal-only
@@ -251,6 +261,11 @@ void startWebRoutes() {
     doc["sensorUpdateInterval"] = sensorUpdateInterval;
   doc["last_soil_raw"] = lastSoilRaw;
   doc["last_water_raw"] = lastWaterRaw;
+  doc["autoWaterEnabled"] = autoWaterEnabled;
+  doc["deadzoneEnabled"] = deadzoneEnabled;
+  doc["deadzoneStartHour"] = deadzoneStartHour;
+  doc["deadzoneEndHour"] = deadzoneEndHour;
+  doc["loggingIntervalMs"] = loggingIntervalMs;
     UNLOCK_STATE();
     String out;
     serializeJson(doc, out);
@@ -301,6 +316,14 @@ void networkTask(void* parameter) {
   }
   Serial.print("[WiFi] Connected! IP: ");
   Serial.println(WiFi.localIP());
+
+  // Configure timezone to Europe/Prague (CET/CEST) and start SNTP/NTP.
+  // TZ string: CET-1CEST,M3.5.0/2,M10.5.0/3  -> follows POSIX TZ format
+  const char* tz = "CET-1CEST,M3.5.0/2,M10.5.0/3";
+  setenv("TZ", tz, 1);
+  tzset();
+  configTzTime(tz, "pool.ntp.org", "time.nist.gov");
+  Serial.println("NTP configured (Europe/Prague TZ)");
 
   // Initialize SD for static file serving (best effort)
   if (sdInit()) {

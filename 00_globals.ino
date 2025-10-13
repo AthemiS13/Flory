@@ -33,6 +33,15 @@ uint16_t soilWetRaw = 0;      // wet soil raw reading (default: low)
 float wateringThreshold = 30.0f;
 int pumpDurationMs = 5000;
 unsigned long sensorUpdateInterval = 1000;  // ms
+// Automated watering defaults
+bool autoWaterEnabled = false;
+// Deadzone (night) watering prevention
+bool deadzoneEnabled = true;
+uint8_t deadzoneStartHour = 22; // 22:00
+uint8_t deadzoneEndHour = 6;    // 06:00 (wraps past midnight)
+
+// SD logging interval (ms): default to 60s to avoid heavy writes
+unsigned long loggingIntervalMs = 60000;
 
 // -------------------- Runtime state (shared) --------------------
 SemaphoreHandle_t stateMutex;

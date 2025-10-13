@@ -28,6 +28,15 @@ extern uint16_t soilWetRaw;
 extern float wateringThreshold;
 extern int pumpDurationMs;
 extern unsigned long sensorUpdateInterval;
+extern bool autoWaterEnabled;
+// deadzone settings (hours 0-23). If enabled and current local hour is in
+// [deadzoneStartHour..deadzoneEndHour) (wrapping allowed), automated watering
+// will be suppressed.
+extern bool deadzoneEnabled;
+extern uint8_t deadzoneStartHour;
+extern uint8_t deadzoneEndHour;
+// logging interval (ms) used for SD activity logging (defaults to 60000)
+extern unsigned long loggingIntervalMs;
 
 extern SemaphoreHandle_t stateMutex;
 extern volatile bool pumpState;

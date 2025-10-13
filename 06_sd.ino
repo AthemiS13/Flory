@@ -28,6 +28,32 @@ bool sdInit() {
   if (!SD.exists("/log")) {
     SD.mkdir("/log");
   }
+  // Attempt to rotate logs to keep only the current month file if time is available
+  struct tm timeinfo;
+  if (getLocalTime(&timeinfo, 0)) {
+    char keep[16];
+    snprintf(keep, sizeof(keep), "/log/%04d-%02d.txt", timeinfo.tm_year + 1900, timeinfo.tm_mon + 1);
+    // iterate files in /log and remove those not matching keep
+    File dir = SD.open("/log");
+    if (dir && dir.isDirectory()) {
+      File file = dir.openNextFile();
+      while (file) {
+        String name = String(file.name());
+        String full = name.startsWith("/") ? name : String("/") + name;
+        if (full != String(keep)) {
+          // remove file or directory
+          if (file.isDirectory()) {
+            sdWipeDirContents(full.c_str());
+            SD.rmdir(full.c_str());
+          } else {
+            SD.remove(full.c_str());
+          }
+        }
+        file = dir.openNextFile();
+      }
+      dir.close();
+    }
+  }
   return true;
 }
 

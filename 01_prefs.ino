@@ -16,6 +16,11 @@ void saveCalibrationToPrefs() {
   doc["otaHostname"] = otaHostname.c_str();
   doc["otaPassword"] = otaPassword.c_str();
   doc["sensorUpdateInterval"] = sensorUpdateInterval;
+  doc["autoWaterEnabled"] = autoWaterEnabled;
+  doc["deadzoneEnabled"] = deadzoneEnabled;
+  doc["deadzoneStartHour"] = deadzoneStartHour;
+  doc["deadzoneEndHour"] = deadzoneEndHour;
+  doc["loggingIntervalMs"] = loggingIntervalMs;
   String s;
   serializeJson(doc, s);
   prefs.putString("cal", s.c_str());
@@ -39,6 +44,11 @@ void loadCalibrationFromPrefs() {
   if (doc.containsKey("otaHostname")) otaHostname = String((const char*)doc["otaHostname"]);
   if (doc.containsKey("otaPassword")) otaPassword = String((const char*)doc["otaPassword"]);
   if (doc.containsKey("sensorUpdateInterval")) sensorUpdateInterval = doc["sensorUpdateInterval"].as<unsigned long>();
+  if (doc.containsKey("autoWaterEnabled")) autoWaterEnabled = doc["autoWaterEnabled"].as<bool>();
+  if (doc.containsKey("deadzoneEnabled")) deadzoneEnabled = doc["deadzoneEnabled"].as<bool>();
+  if (doc.containsKey("deadzoneStartHour")) deadzoneStartHour = (uint8_t)doc["deadzoneStartHour"].as<int>();
+  if (doc.containsKey("deadzoneEndHour")) deadzoneEndHour = (uint8_t)doc["deadzoneEndHour"].as<int>();
+  if (doc.containsKey("loggingIntervalMs")) loggingIntervalMs = doc["loggingIntervalMs"].as<unsigned long>();
   if (doc["map"].is<JsonArray>()) {
     std::vector<CalPoint> newmap;
     for (JsonObject o : doc["map"].as<JsonArray>()) {

@@ -1,17 +1,7 @@
 SmartPot TODO List
 
 
-2. Pump Control (PWM)
-	•	2.1 Keep only duty cycle setting.
-	•	2.2 Remove frequency and resolution settings from API.
-
-⸻
-
 3. Other Settings
-	•	3.1 Sensor update interval.
-	•	3.2 Device restart via API.
-	•	3.3 File manager: drag-and-drop to edit web files on SD card.
-	•	3.4 Add mDNS support to web server.
 	•	3.5 Logging interval setting.
 	•	3.6 Deadzone setting for watering: e.g., prevent watering between 22:00 and 06:00.
 
@@ -25,3 +15,4 @@ SmartPot TODO List
 	•	4.4 Store sensor and activity logs on SD card (/log folder).
 	•	4.5 Rewrite logs monthly to avoid filling up SD card.
 	•	4.6 Use an efficient logging method to reduce SD card wear.
+	•	4.7 A way to enable.disable autonomous operation.
