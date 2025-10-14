@@ -1,5 +1,5 @@
 {
-  "name": "app",
+  "name": "my-app",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -10,7 +10,8 @@
   "dependencies": {
     "react": "19.1.0",
     "react-dom": "19.1.0",
-    "next": "15.5.5"
+    "next": "15.5.5",
+    "recharts": "^2.5.0"
   },
   "devDependencies": {
     "typescript": "^5",
