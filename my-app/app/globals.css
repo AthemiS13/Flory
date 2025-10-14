@@ -43,8 +43,8 @@ body {
   display:grid;
   grid-template-columns: repeat(4, 1fr);
   grid-template-rows: repeat(3, auto);
-  grid-auto-rows: minmax(140px, auto);
-  gap:24px;
+  grid-auto-rows: minmax(180px, auto);
+  gap:28px;
   width: 100%;
 }
 
@@ -54,7 +54,7 @@ body {
 .card {
   background: var(--card);
   border-radius: var(--rounded-lg);
-  padding: 18px;
+  padding: 22px;
   border: 1px solid var(--card-stroke);
   display:flex;
   align-items:center;

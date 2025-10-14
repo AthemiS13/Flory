@@ -12,7 +12,7 @@ export default function Home(){
       <main>
         <div className="main-grid">
           <div className="card" style={{borderRadius:22}}>
-            <div style={{fontSize:64,fontWeight:800,color:'var(--fg)'}}>Flory</div>
+            <div style={{fontSize:44,fontWeight:800,color:'var(--fg)'}}>Flory</div>
           </div>
 
           <div className="card">
@@ -49,11 +49,11 @@ export default function Home(){
           </div>
 
           <div className="col-span-2">
-            <ChartAreaInteractive className="" />
+            <ChartAreaInteractive className="" title="Soil Moisture and Water Levels in Time" />
           </div>
 
           <div className="col-span-2">
-            <ChartAreaInteractive className="" />
+            <ChartAreaInteractive className="" title="Temperature and Humidity in Time" />
           </div>
         </div>
       </main>
