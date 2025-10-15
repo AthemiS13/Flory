@@ -12,11 +12,11 @@ const chartData = [
   { date: 'Tue 2', soil: 21, water: 62 },
 ]
 
-export default function AreaInner(){
+export default function AreaInner({title = 'Soil Moisture and Water Levels in Time'}:{title?:string}){
   return (
   <div style={{width:'100%'}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
-        <div style={{fontSize:14,color:'var(--muted)'}}>Soil Moisture and Water Levels in Time</div>
+        <div style={{fontSize:14,color:'var(--muted)'}}>{title}</div>
         <select style={{background:'transparent',color:'var(--muted)',borderRadius:10,border:'1px solid rgba(255,255,255,0.04)',padding:6}}>
           <option>Last Week</option>
         </select>

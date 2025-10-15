@@ -8,7 +8,7 @@ export default function ChartAreaInteractive({className = '', title='Soil Moistu
   return (
     <Card className={`card-large ${className}`} center={false}>
       <Suspense fallback={<div style={{height:180}} />}> 
-        <Area />
+        <Area title={title} />
       </Suspense>
     </Card>
   )

@@ -14,13 +14,16 @@ const data = [
 export default function BarInner(){
   return (
     <div style={{width:'100%'}}>
+      <div style={{display:'flex',justifyContent:'flex-start',alignItems:'center',marginBottom:8}}>
+        <div style={{fontSize:14,color:'var(--muted)'}}>Pump ON last 7 days</div>
+      </div>
       <div style={{height:140}}>
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data}>
             <CartesianGrid vertical={false} strokeOpacity={0.06} />
             <XAxis dataKey="month" tick={{fill:'var(--muted)'}} axisLine={false} tickLine={false} />
-            <Tooltip contentStyle={{background:'var(--card)',border:'1px solid var(--card-stroke)'}} itemStyle={{color:'var(--fg)'}}/>
-            <Bar dataKey="value" fill="var(--graph-1)" radius={[8,8,8,8]} />
+            <Tooltip cursor={false} contentStyle={{background:'var(--card)',border:'1px solid var(--card-stroke)'}} itemStyle={{color:'var(--fg)'}}/>
+            <Bar dataKey="value" fill="var(--graph-1)" radius={[8,8,8,8]} isAnimationActive={false} />
           </BarChart>
         </ResponsiveContainer>
       </div>
