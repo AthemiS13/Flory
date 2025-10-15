@@ -16,7 +16,7 @@ export default function Home(){
           </div>
 
           <div className="card">
-            <Gauge value={20} />
+            <Gauge value={20} label="Water Level" color="var(--graph-2)" />
           </div>
 
           <div className="col-span-2">
