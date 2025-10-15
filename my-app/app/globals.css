@@ -13,6 +13,9 @@
 }
 
 html, body, #__next { height: 100%; }
+/* Reserve scrollbar space to avoid layout jumps when pages have different scroll heights */
+html { scrollbar-gutter: stable; }
+body { min-height: 100vh; }
 
 
 body {
@@ -36,7 +39,8 @@ body {
   flex-direction:column;
   gap:24px;
   align-items:center;
-  padding-top:32px;
+  height:100vh;
+  justify-content:center;
 }
 
 .main-grid {
@@ -75,5 +79,33 @@ body {
 
 .chart-wrapper { background: transparent; border-radius: 16px; padding: 8px; }
 
-.round-btn { background: rgba(255,255,255,0.03); width:48px; height:48px; display:flex; align-items:center; justify-content:center; border-radius:999px; }
+.round-btn { background: rgba(255,255,255,0.03); width:48px; height:48px; display:flex; align-items:center; justify-content:center; border-radius:999px; transition: transform 120ms ease, border 120ms ease, background 120ms ease; -webkit-tap-highlight-color: transparent; -webkit-appearance: none; appearance: none; }
+.round-btn:hover { transform: scale(1.06); }
+/* Remove default focus outline/overlay for mouse interactions, but show a subtle ring for keyboard users via :focus-visible */
+/* Prevent gray tap-highlight on mobile and remove default blue outline on click */
+.round-btn:focus { outline: none !important; background-color: transparent !important; box-shadow: none !important; }
+.round-btn:active { background-color: transparent !important; box-shadow: none !important; }
+.round-btn:not(:focus-visible) { outline: none !important; box-shadow: none !important; }
+.round-btn:focus-visible { box-shadow: 0 0 0 6px rgba(0,112,243,0.08); transform: scale(1.06); }
+
+/* Extra resets for WebKit/Chrome/Safari focus rings and tap highlights */
+.round-btn, .round-btn * {
+  -webkit-tap-highlight-color: transparent !important;
+  -webkit-focus-ring-color: transparent !important;
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  background-color: transparent !important;
+}
+
+/* Active state (route selected) — visually distinct but controlled via CSS so focus styles don't create overlays */
+.round-btn.active { background: var(--accent-bg, #e0e0e0); border: none !important; box-shadow: 0 0 0 4px rgba(0,112,243,0.06); }
+
+.icons-stack { display:flex; flex-direction:column; gap:44px; align-items:center }
+
+.card-header { width:100%; display:flex; align-items:center; justify-content:flex-start; gap:8px; margin-bottom:8px }
+.card-header .title { font-weight:700; color:var(--fg); font-size:13px }
+
+.chart-legend-wrapper { width:100%; display:flex; gap:12px; align-items:center; padding-left:8px; margin-top:8px }
+.chart-legend-item { display:flex; align-items:center; gap:8px }
+.chart-legend-square { width:12px; height:12px; border-radius:4px; }
 

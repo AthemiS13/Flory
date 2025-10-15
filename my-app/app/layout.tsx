@@ -7,10 +7,17 @@ export const metadata: Metadata = {
   description: 'Smart-Pot dashboard',
 }
 
+import Sidebar from '../components/Sidebar';
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className={`${inter.variable} font-sans bg-bg text-fg`}>{children}</body>
+      <body className={`${inter.variable} font-sans bg-bg text-fg`}>
+        <div className="container-dashboard">
+          <Sidebar />
+          <main>{children}</main>
+        </div>
+      </body>
     </html>
-  )
+  );
 }
