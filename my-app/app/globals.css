@@ -1,4 +1,14 @@
-@import "tailwindcss";
+/* Reset anchor tag defaults that might interfere */
+/* Tailwind removed — keep minimal anchor reset */
+a.round-btn,
+a.round-btn:link,
+a.round-btn:visited,
+a.round-btn:hover,
+a.round-btn:active,
+a.round-btn:focus {
+  color: inherit;
+  text-decoration: none;
+}
 
 /* Dashboard theme variables (pulled from design.png) */
 :root {
@@ -79,14 +89,36 @@ body {
 
 .chart-wrapper { background: transparent; border-radius: 16px; padding: 8px; }
 
-.round-btn { background: rgba(255,255,255,0.03); width:48px; height:48px; display:flex; align-items:center; justify-content:center; border-radius:999px; transition: transform 120ms ease, border 120ms ease, background 120ms ease; -webkit-tap-highlight-color: transparent; -webkit-appearance: none; appearance: none; }
+.round-btn { 
+  background: rgba(255,255,255,0.03); 
+  width:48px; 
+  height:48px; 
+  display:flex; 
+  align-items:center; 
+  justify-content:center; 
+  border-radius:999px; 
+  transition: transform 120ms ease, border 120ms ease; 
+  -webkit-tap-highlight-color: transparent; 
+  -webkit-appearance: none; 
+  appearance: none; 
+}
 .round-btn:hover { transform: scale(1.06); }
-/* Remove default focus outline/overlay for mouse interactions, but show a subtle ring for keyboard users via :focus-visible */
-/* Prevent gray tap-highlight on mobile and remove default blue outline on click */
-.round-btn:focus { outline: none !important; background-color: transparent !important; box-shadow: none !important; }
-.round-btn:active { background-color: transparent !important; box-shadow: none !important; }
-.round-btn:not(:focus-visible) { outline: none !important; box-shadow: none !important; }
-.round-btn:focus-visible { box-shadow: 0 0 0 6px rgba(0,112,243,0.08); transform: scale(1.06); }
+/* Remove focus styles completely for both buttons and links */
+.round-btn:focus,
+.round-btn:active,
+.round-btn:focus-visible,
+.round-btn:link:focus,
+.round-btn:link:active,
+.round-btn:visited:focus,
+.round-btn:visited:active,
+a.round-btn:focus,
+a.round-btn:active,
+a.round-btn:focus-visible { 
+  outline: none !important; 
+  box-shadow: none !important; 
+  background: rgba(255,255,255,0.03) !important;
+  color: inherit !important;
+}
 
 /* Extra resets for WebKit/Chrome/Safari focus rings and tap highlights */
 .round-btn, .round-btn * {
@@ -94,11 +126,24 @@ body {
   -webkit-focus-ring-color: transparent !important;
   -webkit-appearance: none !important;
   appearance: none !important;
-  background-color: transparent !important;
 }
 
 /* Active state (route selected) — visually distinct but controlled via CSS so focus styles don't create overlays */
-.round-btn.active { background: var(--accent-bg, #e0e0e0); border: none !important; box-shadow: 0 0 0 4px rgba(0,112,243,0.06); }
+.round-btn.active,
+a.round-btn.active {
+  /* Keep the visual circular background but avoid swapping the base background color
+     on active/press which can trigger the UA pressed-state painting. Use an inset
+     ring to indicate the active route instead of replacing the background. */
+  background: rgba(255,255,255,0.03) !important; /* same as default */
+  border: none !important;
+  box-shadow: inset 0 0 0 2px rgba(255,255,255,0.02) !important;
+}
+.round-btn.active:focus-visible,
+a.round-btn.active:focus-visible {
+  /* Keep keyboard focus visible but do not change the active background on pointer press */
+  box-shadow: none !important;
+  outline: none !important;
+}
 
 .icons-stack { display:flex; flex-direction:column; gap:44px; align-items:center }
 
