@@ -23,9 +23,15 @@ a.round-btn:focus {
 }
 
 html, body, #__next { height: 100%; }
-/* Reserve scrollbar space to avoid layout jumps when pages have different scroll heights */
-html { scrollbar-gutter: stable; }
-body { min-height: 100vh; }
+/* Disable scrolling on html and body */
+html { 
+  overflow: hidden;
+  height: 100vh;
+}
+body { 
+  height: 100vh;
+  overflow: hidden;
+}
 
 
 body {
@@ -42,8 +48,10 @@ body {
   display: grid;
   grid-template-columns: 84px 1fr;
   gap: 32px;
-  padding: 32px;
+  padding-left: 32px;
+  padding-right: 32px;
   height: 100vh;
+  align-items: center;
 }
 
 .sidebar {
@@ -51,8 +59,8 @@ body {
   flex-direction:column;
   gap:24px;
   align-items:center;
-  height:100vh;
   justify-content:center;
+  padding:0 !important;
 }
 
 .main-grid {
@@ -194,24 +202,14 @@ a.round-btn.active:focus-visible {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 28px;
-  align-items: start;
+  align-items: center;
 }
 
 .settings-card { padding: 28px; border-radius: var(--rounded-lg); }
 
-/* Make the settings cards almost full viewport height and allow inner scrolling */
-.settings-grid {
-  /* fixed visual height for the paired cards so they don't exceed viewport */
-  height: calc(100vh - 96px);
-  max-height: calc(100vh - 96px);
-  align-items: stretch;
-  margin-top: -16px; /* nudge up slightly */
-}
-
 .settings-card {
   display: flex;
   flex-direction: column;
-  height: 100%;
   /* increased horizontal padding per design */
   padding-left: 88px;
   padding-right: 88px;
@@ -224,7 +222,7 @@ a.round-btn.active:focus-visible {
   flex-direction: column;
   gap: 28px;
   flex: 1 1 auto;
-  overflow: auto;
+  overflow: hidden;
   padding-right: 6px; /* room for scrollbar */
   justify-content: space-between; /* push Save button to bottom when possible */
   padding-top: 16px;

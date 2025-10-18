@@ -12,7 +12,7 @@ const icons = [
 export default function Sidebar() {
   const pathname = usePathname()
   return (
-    <aside className="sidebar" style={{paddingTop:20, paddingBottom:20, justifyContent:'center'}}>
+    <aside className="sidebar">
       <div style={{display:'flex',flexDirection:'column',gap:22,alignItems:'center'}}>
         {icons.map(icon => (
           <Link
