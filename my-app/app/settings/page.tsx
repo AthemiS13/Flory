@@ -33,9 +33,11 @@ export default function SettingsPage() {
   const [pumpDurationMs, setPumpDurationMs] = React.useState(3500)
   const [pumpPwmDuty, setPumpPwmDuty] = React.useState(30)
   const [deadzoneEnabled, setDeadzoneEnabled] = React.useState(true)
-  // ensure start < end to avoid initial overlap and stuck thumbs
-  const [deadzoneStart, setDeadzoneStart] = React.useState(7)
-  const [deadzoneEnd, setDeadzoneEnd] = React.useState(21)
+  // Left handle: PM hours (12-23, slider range 0-11 maps to 12:00-23:00)
+  // Right handle: AM hours (0-11, slider range 0-11 maps to 00:00-11:00 next day)
+  // This represents the overnight "do not disturb" period
+  const [deadzonePMHour, setDeadzonePMHour] = React.useState(9) // 9 = 21:00 (12+9)
+  const [deadzoneAMHour, setDeadzoneAMHour] = React.useState(7) // 7 = 07:00
   const [loggingIntervalMin, setLoggingIntervalMin] = React.useState(40)
   const [sensorUpdateIntervalSec, setSensorUpdateIntervalSec] = React.useState(30)
   const [otaHostname, setOtaHostname] = React.useState('')
@@ -77,24 +79,23 @@ export default function SettingsPage() {
     updateRangeBg(sensorRef.current)
     const container = document.querySelector('.double-range') as HTMLDivElement | null
     updateDoubleRangeBg(container, deadzoneRef.current, deadzoneRef2.current)
-  }, [wateringThreshold, pumpDurationMs, pumpPwmDuty, deadzoneStart, loggingIntervalMin, sensorUpdateIntervalSec])
+  }, [wateringThreshold, pumpDurationMs, pumpPwmDuty, deadzonePMHour, deadzoneAMHour, loggingIntervalMin, sensorUpdateIntervalSec])
 
   function updateDoubleRangeBg(container: HTMLDivElement | null, a: HTMLInputElement | null, b: HTMLInputElement | null) {
     if (!container || !a || !b) return
-    const min = Number(a.min || 0)
-    const max = Number(a.max || 23)
-    let va = Number(a.value)
-    let vb = Number(b.value)
-    // Ensure values respect ordering
-    if (va > vb) [va, vb] = [vb, va]
-    const start = va
-    const end = vb
-    const startPct = ((start - min) / (max - min)) * 100
-    const endPct = ((end - min) / (max - min)) * 100
-    // clamp percentages to [0,100]
-    const s = Math.max(0, Math.min(100, startPct))
-    const e = Math.max(0, Math.min(100, endPct))
-    container.style.background = `linear-gradient(90deg, var(--bg) ${s}%, var(--fg) ${s}%, var(--fg) ${e}%, var(--bg) ${e}%)`
+    // Left input controls position 0-50% (hours 12-23)
+    // Right input controls position 50-100% (hours 0-11)
+    const pmHour = deadzonePMHour + 12  // 0-11 becomes 12-23
+    const amHour = deadzoneAMHour       // 0-11 stays 0-11
+    
+    // Map PM hour (12-23) to left half of slider (0-50%)
+    const pmPct = (deadzonePMHour / 11) * 50
+    // Map AM hour (0-11) to right half of slider (50-100%)
+    const amPct = 50 + (deadzoneAMHour / 11) * 50
+    
+    // Paint: background up to PM start, then white from PM start through midnight wrap to AM end, then background
+    // Split at 50%: left half is PM (12-23), right half is AM (0-11)
+    container.style.background = `linear-gradient(90deg, var(--bg) 0%, var(--bg) ${pmPct}%, var(--fg) ${pmPct}%, var(--fg) 50%, var(--fg) 50%, var(--fg) ${amPct}%, var(--bg) ${amPct}%, var(--bg) 100%)`
   }
 
   return (
@@ -175,14 +176,21 @@ export default function SettingsPage() {
 
             <div>
               <div style={{ color: 'var(--fg)', marginBottom: 8 }}>Range</div>
-              <div style={{ textAlign: 'center', marginBottom: 8, color: 'var(--fg)' }}>{deadzoneStart}PM - {deadzoneEnd}AM</div>
+              <div style={{ textAlign: 'center', marginBottom: 8, color: 'var(--fg)' }}>
+                {String(deadzonePMHour + 12).padStart(2, '0')}:00 - {String(deadzoneAMHour).padStart(2, '0')}:00
+              </div>
               <div className="double-range" ref={(el) => { if (el) updateDoubleRangeBg(el, deadzoneRef.current, deadzoneRef2.current) }}>
                 <input
                   ref={deadzoneRef}
                   type="range"
                   min={0}
-                  max={23}
-                  value={deadzoneStart}
+                  max={11}
+                  value={deadzonePMHour}
+                  style={{ 
+                    width: '50%',
+                    left: '0',
+                    right: 'auto'
+                  }}
                   onPointerDown={(e) => {
                     const target = e.currentTarget as HTMLInputElement
                     try { target.setPointerCapture((e as any).pointerId) } catch (err) {}
@@ -200,22 +208,27 @@ export default function SettingsPage() {
                     }
                   }}
                   onChange={(e) => {
-                    const minGap = 1
                     let v = Number(e.target.value)
-                    // clamp so left handle can't cross right handle
-                    if (v > deadzoneEnd - minGap) v = deadzoneEnd - minGap
-                    v = Math.max(Number((e.target as HTMLInputElement).min || '0'), v)
-                    setDeadzoneStart(v)
+                    setDeadzonePMHour(v)
                     updateDoubleRangeBg(e.currentTarget.parentElement as HTMLDivElement, e.currentTarget, deadzoneRef2.current)
                   }}
-                  onInput={(e) => updateDoubleRangeBg(e.currentTarget.parentElement as HTMLDivElement, e.currentTarget, deadzoneRef2.current)}
+                  onInput={(e) => {
+                    let v = Number(e.currentTarget.value)
+                    setDeadzonePMHour(v)
+                    updateDoubleRangeBg(e.currentTarget.parentElement as HTMLDivElement, e.currentTarget, deadzoneRef2.current)
+                  }}
                 />
                 <input
                   ref={deadzoneRef2}
                   type="range"
                   min={0}
-                  max={23}
-                  value={deadzoneEnd}
+                  max={11}
+                  value={deadzoneAMHour}
+                  style={{ 
+                    width: '50%',
+                    left: '50%',
+                    right: 'auto'
+                  }}
                   onPointerDown={(e) => {
                     const target = e.currentTarget as HTMLInputElement
                     try { target.setPointerCapture((e as any).pointerId) } catch (err) {}
@@ -233,15 +246,15 @@ export default function SettingsPage() {
                     }
                   }}
                   onChange={(e) => {
-                    const minGap = 1
                     let v = Number(e.target.value)
-                    // clamp so right handle can't cross left handle
-                    if (v < deadzoneStart + minGap) v = deadzoneStart + minGap
-                    v = Math.min(Number((e.target as HTMLInputElement).max || '23'), v)
-                    setDeadzoneEnd(v)
+                    setDeadzoneAMHour(v)
                     updateDoubleRangeBg(e.currentTarget.parentElement as HTMLDivElement, deadzoneRef.current, e.currentTarget)
                   }}
-                  onInput={(e) => updateDoubleRangeBg(e.currentTarget.parentElement as HTMLDivElement, deadzoneRef.current, e.currentTarget)}
+                  onInput={(e) => {
+                    let v = Number(e.currentTarget.value)
+                    setDeadzoneAMHour(v)
+                    updateDoubleRangeBg(e.currentTarget.parentElement as HTMLDivElement, deadzoneRef.current, e.currentTarget)
+                  }}
                 />
               </div>
             </div>
