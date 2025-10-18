@@ -171,7 +171,8 @@ a.round-btn:focus-visible {
 }
 
 /* OTA group small spacing */
-.ota-group { display:flex; flex-direction:column; gap:8px }
+.ota-group { display:flex; flex-direction:column; gap:20px }
+.ota-group > div { min-width: 0; }
 
 /* Active state (route selected) — visually distinct but controlled via CSS so focus styles don't create overlays */
 .round-btn.active,
@@ -234,18 +235,20 @@ a.round-btn.active:focus-visible {
 
 .settings-input {
   width: 100%;
+  max-width: 100%;
   padding: 10px 12px;
   border-radius: 10px;
   background: #0A0A0A;
-  border: 1px solid rgba(255,255,255,0.03);
+  border: 1px solid #2E2E2E;
   color: var(--fg);
   outline: none;
+  box-sizing: border-box;
 }
 
 .ui-button, .ui-button:focus {
   background: #0A0A0A;
   color: var(--fg);
-  border: 1px solid rgba(255,255,255,0.04);
+  border: 1px solid #2E2E2E;
   padding: 10px 14px;
   border-radius: 10px;
   cursor: pointer;

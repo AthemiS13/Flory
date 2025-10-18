@@ -5,10 +5,39 @@ import { Minus, Plus } from "lucide-react"
 import { Switch } from "@/components/ui/switch"
 
 function IconButton({ onClick, children, aria }: { onClick?: () => void; children: React.ReactNode; aria?: string }) {
+  const intervalRef = React.useRef<NodeJS.Timeout | null>(null)
+  const timeoutRef = React.useRef<NodeJS.Timeout | null>(null)
+
+  const startRepeat = () => {
+    if (onClick) {
+      onClick() // Execute immediately on press
+      timeoutRef.current = setTimeout(() => {
+        intervalRef.current = setInterval(() => {
+          onClick()
+        }, 100) // Repeat every 100ms while holding
+      }, 300) // Wait 300ms before starting repeat
+    }
+  }
+
+  const stopRepeat = () => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current)
+      timeoutRef.current = null
+    }
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current)
+      intervalRef.current = null
+    }
+  }
+
   return (
     <button
       aria-label={aria}
-      onClick={onClick}
+      onMouseDown={startRepeat}
+      onMouseUp={stopRepeat}
+      onMouseLeave={stopRepeat}
+      onTouchStart={startRepeat}
+      onTouchEnd={stopRepeat}
       className="icon-btn" 
       style={{ width: 28, height: 28, borderRadius: 999, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
     >
@@ -36,11 +65,11 @@ export default function SettingsPage() {
   const [otaPassword, setOtaPassword] = React.useState('')
 
   function adjustPump(by: number) {
-    setPumpDurationMs((v) => Math.max(0, v + by))
+    setPumpDurationMs((v) => Math.max(0, Math.min(10000, v + by)))
   }
 
   function adjustLogging(by: number) {
-    setLoggingIntervalMin((v) => Math.max(1, v + by))
+    setLoggingIntervalMin((v) => Math.max(1, Math.min(120, v + by)))
   }
 
   // helper to set range background gradient: selected part is var(--fg), remainder is var(--bg)
@@ -261,12 +290,12 @@ export default function SettingsPage() {
               <div>
                   <div style={{ color: 'var(--fg)', marginBottom: 8, fontSize: 15 }}>Logging Interval</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <IconButton onClick={() => adjustLogging(-5)} aria="decrease-logging"><Minus /></IconButton>
+                  <IconButton onClick={() => adjustLogging(-1)} aria="decrease-logging"><Minus /></IconButton>
                   <div style={{ textAlign: 'center', flex: 1 }}>
                       <div style={{ fontSize: 56, fontWeight: 800, color: 'var(--fg)' }}>{loggingIntervalMin}</div>
                     <div className="muted-50" style={{ fontSize: 12 }}>minutes</div>
                   </div>
-                  <IconButton onClick={() => adjustLogging(5)} aria="increase-logging"><Plus /></IconButton>
+                  <IconButton onClick={() => adjustLogging(1)} aria="increase-logging"><Plus /></IconButton>
                 </div>
                 <input
                   ref={loggingRef}
