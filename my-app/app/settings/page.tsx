@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { Minus, Plus } from "lucide-react"
+import { Switch } from "@/components/ui/switch"
 
 function IconButton({ onClick, children, aria }: { onClick?: () => void; children: React.ReactNode; aria?: string }) {
   return (
@@ -16,16 +17,7 @@ function IconButton({ onClick, children, aria }: { onClick?: () => void; childre
   )
 }
 
-function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label?: string }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-      <div style={{ color: 'var(--fg)', fontWeight: 600 }}>{label}</div>
-      <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-        <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
-      </label>
-    </div>
-  )
-}
+
 
 export default function SettingsPage() {
   const [autoWaterEnabled, setAutoWaterEnabled] = React.useState(true)
@@ -105,15 +97,13 @@ export default function SettingsPage() {
           <div className="settings-card-inner" style={{ width: '100%' }}>
             <div className="settings-card-body" style={{ width: '100%' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ fontSize: 15, fontWeight: 600 }}>Automated Watering</div>
-              <div>
-                <input type="checkbox" checked={autoWaterEnabled} onChange={(e) => setAutoWaterEnabled(e.target.checked)} />
-              </div>
+              <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--fg)' }}>Automated Watering</div>
+              <Switch checked={autoWaterEnabled} onCheckedChange={setAutoWaterEnabled} />
             </div>
 
             <div>
-              <div style={{ color: 'var(--fg)', marginBottom: 8 }}>Watering Treshold</div>
-              <div style={{ textAlign: 'center', marginBottom: 8, color: 'var(--fg)' }}>{wateringThreshold}%</div>
+              <div style={{ color: 'var(--fg)', marginBottom: 8, fontSize: 15 }}>Watering Treshold</div>
+              <div style={{ textAlign: 'center', marginBottom: 8, color: 'var(--fg)', fontSize: 15 }}>{wateringThreshold}%</div>
               <div>
                 <input
                   ref={wateringRef}
@@ -128,7 +118,7 @@ export default function SettingsPage() {
             </div>
 
             <div>
-              <div style={{ color: 'var(--fg)', marginBottom: 8 }}>Pump ON Duration</div>
+              <div style={{ color: 'var(--fg)', marginBottom: 8, fontSize: 15 }}>Pump ON Duration</div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
                 <IconButton onClick={() => adjustPump(-100)} aria="decrease-pump">
                   <Minus />
@@ -141,21 +131,21 @@ export default function SettingsPage() {
                   <Plus />
                 </IconButton>
               </div>
-              <div style={{ textAlign: 'center', marginTop: 12, marginBottom: 6, color: 'var(--fg)' }}>{Math.round((pumpDurationMs/10000)*100)}%</div>
               <input
                 ref={pumpRef}
                 type="range"
                 min={0}
                 max={10000}
                 value={pumpDurationMs}
+                className="picker-slider"
                 onChange={(e) => { setPumpDurationMs(Number(e.target.value)); updateRangeBg(e.target) }}
                 onInput={(e) => updateRangeBg(e.currentTarget as HTMLInputElement)}
               />
             </div>
 
             <div>
-              <div style={{ color: 'var(--fg)', marginBottom: 8 }}>Pump Speed</div>
-              <div style={{ textAlign: 'center', marginBottom: 8, color: 'var(--fg)' }}>{pumpPwmDuty}%</div>
+              <div style={{ color: 'var(--fg)', marginBottom: 8, fontSize: 15 }}>Pump Speed</div>
+              <div style={{ textAlign: 'center', marginBottom: 8, color: 'var(--fg)', fontSize: 15 }}>{pumpPwmDuty}%</div>
               <div>
                 <input
                   ref={speedRef}
@@ -171,12 +161,12 @@ export default function SettingsPage() {
 
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ fontWeight: 600, color: 'var(--fg)' }}>Pump Deadzone</div>
-              <input type="checkbox" checked={deadzoneEnabled} onChange={(e) => setDeadzoneEnabled(e.target.checked)} />
+              <Switch checked={deadzoneEnabled} onCheckedChange={setDeadzoneEnabled} />
             </div>
 
             <div>
-              <div style={{ color: 'var(--fg)', marginBottom: 8 }}>Range</div>
-              <div style={{ textAlign: 'center', marginBottom: 8, color: 'var(--fg)' }}>
+              <div style={{ color: 'var(--fg)', marginBottom: 8, fontSize: 15 }}>Range</div>
+              <div style={{ textAlign: 'center', marginBottom: 8, color: 'var(--fg)', fontSize: 15 }}>
                 {String(deadzonePMHour + 12).padStart(2, '0')}:00 - {String(deadzoneAMHour).padStart(2, '0')}:00
               </div>
               <div className="double-range" ref={(el) => { if (el) updateDoubleRangeBg(el, deadzoneRef.current, deadzoneRef2.current) }}>
@@ -269,7 +259,7 @@ export default function SettingsPage() {
           <div className="settings-card-inner" style={{ width: '100%' }}>
             <div className="settings-card-body" style={{ width: '100%' }}>
               <div>
-                  <div style={{ color: 'var(--fg)', marginBottom: 8 }}>Logging Interval</div>
+                  <div style={{ color: 'var(--fg)', marginBottom: 8, fontSize: 15 }}>Logging Interval</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   <IconButton onClick={() => adjustLogging(-5)} aria="decrease-logging"><Minus /></IconButton>
                   <div style={{ textAlign: 'center', flex: 1 }}>
@@ -278,21 +268,21 @@ export default function SettingsPage() {
                   </div>
                   <IconButton onClick={() => adjustLogging(5)} aria="increase-logging"><Plus /></IconButton>
                 </div>
-                <div style={{ textAlign: 'center', marginTop: 12, marginBottom: 8, color: 'var(--fg)' }}>{loggingIntervalMin} minutes</div>
                 <input
                   ref={loggingRef}
                   type="range"
                   min={1}
                   max={120}
                   value={loggingIntervalMin}
+                  className="picker-slider"
                   onChange={(e) => { setLoggingIntervalMin(Number(e.target.value)); updateRangeBg(e.target) }}
                   onInput={(e) => updateRangeBg(e.currentTarget as HTMLInputElement)}
                 />
               </div>
 
               <div>
-                <div style={{ color: 'var(--muted)', marginBottom: 8 }}>Sensor Update Interval</div>
-                <div style={{ textAlign: 'center', marginBottom: 8, color: 'var(--fg)' }}>{sensorUpdateIntervalSec}s</div>
+                <div style={{ color: 'var(--fg)', marginBottom: 8, fontSize: 15 }}>Sensor Update Interval</div>
+                <div style={{ textAlign: 'center', marginBottom: 8, color: 'var(--fg)', fontSize: 15 }}>{sensorUpdateIntervalSec}s</div>
                 <div>
                   <input
                     ref={sensorRef}
@@ -308,18 +298,18 @@ export default function SettingsPage() {
 
               <div className="ota-group">
                 <div>
-                  <div style={{ color: 'var(--muted)', marginBottom: 8 }}>OTA Hostname</div>
+                  <div style={{ color: 'var(--fg)', marginBottom: 8, fontSize: 15 }}>OTA Hostname</div>
                   <input placeholder="Hostname" value={otaHostname} onChange={(e) => setOtaHostname(e.target.value)} className="settings-input" />
                 </div>
 
                 <div>
-                  <div style={{ color: 'var(--muted)', marginBottom: 8 }}>OTA Password</div>
-                  <input placeholder="Password" value={otaPassword} onChange={(e) => setOtaPassword(e.target.value)} className="settings-input" />
+                  <div style={{ color: 'var(--fg)', marginBottom: 8, fontSize: 15 }}>OTA Password</div>
+                  <input placeholder="Password" type="password" value={otaPassword} onChange={(e) => setOtaPassword(e.target.value)} className="settings-input" />
                 </div>
               </div>
 
               <div>
-                <div style={{ color: 'var(--fg)', marginBottom: 8 }}>Device</div>
+                <div style={{ color: 'var(--fg)', marginBottom: 8, fontSize: 15 }}>Device</div>
                 <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
                   <button className="ui-button" style={{ flex: 1 }}>Test Pump</button>
                   <button className="ui-button" style={{ flex: 1 }}>Restart</button>

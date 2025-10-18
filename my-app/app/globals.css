@@ -202,8 +202,8 @@ a.round-btn.active:focus-visible {
 /* Make the settings cards almost full viewport height and allow inner scrolling */
 .settings-grid {
   /* fixed visual height for the paired cards so they don't exceed viewport */
-  height: calc(100vh - 120px);
-  max-height: calc(100vh - 100px);
+  height: calc(100vh - 96px);
+  max-height: calc(100vh - 96px);
   align-items: stretch;
   margin-top: -16px; /* nudge up slightly */
 }
@@ -222,16 +222,16 @@ a.round-btn.active:focus-visible {
 .settings-card-inner {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 28px;
   flex: 1 1 auto;
   overflow: auto;
   padding-right: 6px; /* room for scrollbar */
   justify-content: space-between; /* push Save button to bottom when possible */
-  padding-top: 12px;
-  padding-bottom: 12px;
+  padding-top: 16px;
+  padding-bottom: 16px;
 }
 
-.settings-card-body { flex: 1 1 auto; display:flex; flex-direction:column; gap:28px; justify-content: space-between }
+.settings-card-body { flex: 1 1 auto; display:flex; flex-direction:column; gap:32px; justify-content: space-between }
 .settings-card-footer { margin-top: 12px; margin-left: 0; margin-right: 0; margin-bottom: 0; align-self: stretch; margin-top: auto }
 
 .settings-input {
@@ -260,6 +260,11 @@ input[type=range]::-moz-range-thumb { width:16px; height:16px; border-radius:999
 input[type=range]::-ms-thumb { width:16px; height:16px; border-radius:999px; background: var(--fg); box-shadow:none; border: none }
 input[type=range]:focus { outline: none }
 
+/* Picker sliders (no thumb, just the line) */
+input[type=range].picker-slider::-webkit-slider-thumb { width: 0; height: 0; opacity: 0; }
+input[type=range].picker-slider::-moz-range-thumb { width: 0; height: 0; opacity: 0; }
+input[type=range].picker-slider::-ms-thumb { width: 0; height: 0; opacity: 0; }
+
 /* checkbox look minimal */
 input[type=checkbox] { width: 40px; height: 22px }
 
@@ -268,6 +273,10 @@ input[type=checkbox] { width: 40px; height: 22px }
 
 /* Ensure icons inside round buttons use the foreground color */
 .round-btn, .round-btn svg { color: var(--fg); }
+
+/* Switch styling */
+.switch-root:focus-visible { outline: 2px solid rgba(255,255,255,0.2); outline-offset: 2px; }
+.switch-root:disabled { opacity: 0.5; }
 
 /* Make range thumb and track use the foreground color for thumb */
 input[type=range]::-webkit-slider-thumb { background: var(--fg); }
