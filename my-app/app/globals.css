@@ -202,7 +202,7 @@ a.round-btn.active:focus-visible {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 28px;
-  align-items: center;
+  align-items: stretch;
 }
 
 .settings-card { padding: 28px; border-radius: var(--rounded-lg); }
@@ -229,26 +229,49 @@ a.round-btn.active:focus-visible {
   padding-bottom: 16px;
 }
 
-.settings-card-body { flex: 1 1 auto; display:flex; flex-direction:column; gap:32px; justify-content: space-between }
-.settings-card-footer { margin-top: 12px; margin-left: 0; margin-right: 0; margin-bottom: 0; align-self: stretch; margin-top: auto }
+.settings-card-body { flex: 1 1 auto; display:flex; flex-direction:column; gap:40px; justify-content: space-between }
+.settings-card-footer { margin-top: 24px; margin-left: 0; margin-right: 0; margin-bottom: 0; align-self: stretch; margin-top: auto }
 
 .settings-input {
   width: 100%;
   padding: 10px 12px;
   border-radius: 10px;
-  background: rgba(255,255,255,0.02);
+  background: #0A0A0A;
   border: 1px solid rgba(255,255,255,0.03);
   color: var(--fg);
   outline: none;
 }
 
 .ui-button, .ui-button:focus {
-  background: transparent;
+  background: #0A0A0A;
   color: var(--fg);
   border: 1px solid rgba(255,255,255,0.04);
   padding: 10px 14px;
   border-radius: 10px;
   cursor: pointer;
+  transition: background 0.15s ease;
+  outline: none;
+}
+
+.ui-button:active {
+  background: #E5E5E5;
+  color: #0A0A0A;
+  animation: button-pulse 0.3s ease;
+}
+
+@keyframes button-pulse {
+  0% {
+    background: #0A0A0A;
+    color: var(--fg);
+  }
+  50% {
+    background: #E5E5E5;
+    color: #0A0A0A;
+  }
+  100% {
+    background: #0A0A0A;
+    color: var(--fg);
+  }
 }
 
 /* small tweak for range inputs */
