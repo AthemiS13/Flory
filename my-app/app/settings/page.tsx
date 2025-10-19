@@ -7,15 +7,16 @@ import { Switch } from "@/components/ui/switch"
 function IconButton({ onClick, children, aria }: { onClick?: () => void; children: React.ReactNode; aria?: string }) {
   const intervalRef = React.useRef<NodeJS.Timeout | null>(null)
   const timeoutRef = React.useRef<NodeJS.Timeout | null>(null)
+  const isTouchDevice = React.useRef<boolean>(false)
 
   const startRepeat = () => {
-    if (onClick) {
+    if (onClick && !isTouchDevice.current) {
       onClick() // Execute immediately on press
       timeoutRef.current = setTimeout(() => {
         intervalRef.current = setInterval(() => {
           onClick()
         }, 100) // Repeat every 100ms while holding
-      }, 300) // Wait 300ms before starting repeat
+      }, 500) // Wait 500ms before starting repeat
     }
   }
 
@@ -30,14 +31,33 @@ function IconButton({ onClick, children, aria }: { onClick?: () => void; childre
     }
   }
 
+  const handleTouchStart = () => {
+    isTouchDevice.current = true
+    if (onClick) {
+      onClick() // Execute once on touch start
+    }
+  }
+
+  const handleTouchEnd = () => {
+    // Do nothing - just single tap execution
+  }
+
+  const handleClick = (e: React.MouseEvent) => {
+    // Only handle click if it's not from a touch device
+    if (!isTouchDevice.current && onClick) {
+      onClick()
+    }
+  }
+
   return (
     <button
       aria-label={aria}
       onMouseDown={startRepeat}
       onMouseUp={stopRepeat}
       onMouseLeave={stopRepeat}
-      onTouchStart={startRepeat}
-      onTouchEnd={stopRepeat}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      onClick={handleClick}
       className="icon-btn" 
       style={{ width: 28, height: 28, borderRadius: 999, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
     >
@@ -120,7 +140,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div style={{ padding: 32 }}>
+    <div className="settings-page-container">
       <div className="settings-grid">
         <div className="card settings-card">
           <div className="settings-card-inner" style={{ width: '100%' }}>
@@ -328,7 +348,7 @@ export default function SettingsPage() {
               <div className="ota-group">
                 <div>
                   <div style={{ color: 'var(--fg)', marginBottom: 8, fontSize: 15 }}>OTA Hostname</div>
-                  <input placeholder="Hostname" value={otaHostname} onChange={(e) => setOtaHostname(e.target.value)} className="settings-input" />
+                  <input placeholder="Hostname" value={otaHostname} onChange={(e) => setOtaHostname(e.target.value)} className="settings-input" autoFocus={false} />
                 </div>
 
                 <div>

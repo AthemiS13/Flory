@@ -23,7 +23,7 @@ a.round-btn:focus {
 }
 
 html, body, #__next { height: 100%; }
-/* Disable scrolling on html and body */
+/* Disable scrolling on html and body on desktop only */
 html { 
   overflow: hidden;
   height: 100vh;
@@ -199,6 +199,10 @@ a.round-btn.active:focus-visible {
 .chart-legend-square { width:12px; height:12px; border-radius:4px; }
 
 /* Settings page layout and controls */
+.settings-page-container {
+  padding: 32px;
+}
+
 .settings-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -206,17 +210,26 @@ a.round-btn.active:focus-visible {
   align-items: stretch;
 }
 
-.settings-card { padding: 28px; border-radius: var(--rounded-lg); }
+.settings-card { padding: 28px; border-radius: 32px; }
 
 .settings-card {
   display: flex;
   flex-direction: column;
   /* increased horizontal padding per design */
-  padding-left: 88px;
-  padding-right: 88px;
+  padding-left: 100px;
+  padding-right: 100px;
   padding-top: 28px;
   padding-bottom: 28px;
 }
+
+/* make sure settings cards don't get artificially narrow due to container padding */
+.settings-card, .settings-card-inner { width: 100%; box-sizing: border-box; }
+
+/* Ensure the inner wrapper in the Sidebar can switch between column and row nicely */
+.sidebar > div { min-width: 0; display: flex; flex-direction: column; align-items: center; }
+
+.sidebar-inner { display:flex; gap:22px; align-items:center; justify-content:center }
+
 
 .settings-card-inner {
   display: flex;
@@ -310,5 +323,245 @@ input[type=range]::-ms-thumb { background: var(--fg); }
 /* Make the filled track slightly lighter so the thumb stands out */
 input[type=range]::-webkit-slider-runnable-track { height:6px; border-radius:6px }
 input[type=range] { width: 100%; }
+
+
+/* ========================================
+   RESPONSIVE DESIGN - TABLET & MOBILE
+   ======================================== */
+
+/* Tablet (portrait and landscape) */
+@media (max-width: 1024px) {
+  /* Enable scrolling on mobile */
+  html, body {
+    overflow: auto;
+    height: auto;
+    min-height: 100vh;
+  }
+
+  .container-dashboard {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+    padding: 16px;
+    gap: 24px;
+    height: auto;
+    min-height: 100vh;
+    align-items: start;
+  }
+
+  .sidebar {
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 8px !important;
+    width: 100%;
+    position: sticky;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 60;
+    background: linear-gradient(180deg, rgba(10,10,10,0.98), rgba(10,10,10,0.95));
+  }
+
+  /* the inner wrapper that contains the icon links should be row on tablet and smaller */
+  .sidebar > div, .sidebar-inner { flex-direction: row; gap: 12px; }
+
+  .main-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+    overflow-y: visible;
+    padding-bottom: 16px;
+    height: auto;
+  }
+
+  .col-span-2,
+  .col-span-3 {
+    grid-column: span 2;
+  }
+
+  .card-huge {
+    height: auto;
+    min-height: 240px;
+  }
+
+  /* Settings page adjustments */
+  .settings-page-container {
+    padding: 8px !important;
+  }
+
+  .settings-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+  }
+
+  .settings-card {
+    padding-left: 24px;
+    padding-right: 24px;
+    padding-top: 20px;
+    padding-bottom: 20px;
+    width: 100%;
+    box-sizing: border-box;
+    margin: 0;
+  }
+}
+
+/* Mobile (phones) */
+@media (max-width: 768px) {
+  .container-dashboard {
+    padding: 12px;
+    gap: 20px;
+    min-height: 100vh;
+  }
+
+  .sidebar {
+    gap: 12px;
+    padding: 8px 0 !important;
+  }
+
+  .main-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    height: auto;
+  }
+
+  .col-span-2,
+  .col-span-3 {
+    grid-column: span 1;
+  }
+
+  .card {
+    padding: 16px;
+  }
+
+  /* Smaller chart titles on mobile */
+  .card h3,
+  .card > div > h3,
+  h3 {
+    font-size: 13px !important;
+  }
+
+  /* Re-target area chart title which is rendered with inline styles in components */
+  .chart-wrapper div[style*="fontSize:14"],
+  .chart-wrapper div[style*="fontSize:14px"] {
+    font-size: 13px !important;
+  }
+
+  /* Also target the inline-styled titles used in AreaInner (fontSize:14 set inline) */
+  .chart-wrapper div[style*="fontSize:14"] {
+    font-size: 13px !important;
+  }
+
+  .stat-number {
+    font-size: 28px;
+  }
+
+  .stat-label {
+    font-size: 12px;
+  }
+
+  /* Settings page mobile adjustments */
+  .settings-page-container {
+    padding: 4px !important;
+  }
+
+  .settings-grid {
+    gap: 12px;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+  }
+
+  .settings-card {
+    padding: 18px 16px;
+    padding-left: 16px;
+    padding-right: 16px;
+    width: 100%;
+    margin: 0;
+  }
+
+  .settings-card-body {
+    gap: 28px !important;
+  }
+
+  /* Override inline styles - make all settings text smaller on mobile */
+  .settings-card-body [style*="fontSize: 15"],
+  .settings-card-body [style*="fontSize: 15px"],
+  .settings-card-body [style*="fontWeight: 600"] {
+    font-size: 12px !important;
+  }
+
+  /* Make large numbers in settings smaller on mobile */
+  .settings-card-body [style*="fontSize: 56"] {
+    font-size: 44px !important;
+  }
+}
+
+/* Small phones and iPhone 15 Pro */
+@media (max-width: 480px) {
+  .container-dashboard {
+    padding: 8px;
+    gap: 8px;
+  }
+
+  .sidebar {
+    gap: 8px;
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .main-grid {
+    gap: 8px;
+  }
+
+  .card {
+    padding: 12px;
+    border-radius: 16px;
+  }
+
+  .stat-number {
+    font-size: 24px;
+  }
+
+  .settings-page-container {
+    padding: 2px !important;
+  }
+
+  .settings-card {
+    padding: 12px 12px;
+    padding-left: 12px;
+    padding-right: 12px;
+    width: 100%;
+    margin: 0;
+  }
+
+  .settings-card-body [style*="fontSize: 15"],
+  .settings-card-body [style*="fontSize: 15px"],
+  .settings-card-body [style*="fontWeight: 600"] {
+
+  /* Tiny chart titles on very small phones */
+  .card h3,
+  .card > div > h3,
+  h3,
+  .chart-wrapper div[style*="fontSize:14"],
+  .chart-wrapper div[style*="fontSize:14px"] {
+    font-size: 12px !important;
+  }
+    font-size: 11px !important;
+  }
+
+  .settings-card-body [style*="fontSize: 56"] {
+    font-size: 36px !important;
+  }
+
+  /* Smaller button text */
+  .ui-button {
+    font-size: 13px;
+    padding: 8px 12px;
+  }
+}
 
 

@@ -16,7 +16,7 @@ export default function AreaInner({title = 'Soil Moisture and Water Levels in Ti
   return (
   <div style={{width:'100%'}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
-        <div style={{fontSize:14,color:'var(--fg)',fontWeight:700}}>{title}</div>
+        <div style={{fontSize:13,color:'var(--fg)',fontWeight:700}}>{title}</div>
         <select aria-label="time range" style={{background:'transparent',color:'var(--muted)',borderRadius:10,border:'1px solid var(--card-stroke)',padding:'6px 8px'}}>
           <option>Last Week</option>
         </select>

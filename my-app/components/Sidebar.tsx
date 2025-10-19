@@ -13,7 +13,7 @@ export default function Sidebar() {
   const pathname = usePathname()
   return (
     <aside className="sidebar">
-      <div style={{display:'flex',flexDirection:'column',gap:22,alignItems:'center'}}>
+      <div className="sidebar-inner" style={{display:'flex',gap:22,alignItems:'center'}}>
         {icons.map(icon => (
           <Link
             key={icon.key}

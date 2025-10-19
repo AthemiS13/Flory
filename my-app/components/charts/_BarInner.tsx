@@ -15,7 +15,7 @@ export default function BarInner(){
   return (
     <div style={{width:'100%'}}>
       <div style={{display:'flex',justifyContent:'flex-start',alignItems:'center',marginBottom:8}}>
-        <div style={{fontSize:14,color:'var(--muted)'}}>Pump ON last 7 days</div>
+        <div style={{fontSize:13,color:'var(--muted)'}}>Pump ON last 7 days</div>
       </div>
       <div style={{height:140}}>
         <ResponsiveContainer width="100%" height="100%">
