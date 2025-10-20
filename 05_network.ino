@@ -170,7 +170,7 @@ bool handleFileRead() {
 
   // Try a few candidate locations on the SD card. Prefer `/app` where
   // the emergency uploader writes files. Fallback to root or `/out`.
-  const char* candidates[] = { "/app", nullptr, "/out" };
+  const char* candidates[] = { "/app", nullptr, "/app/out" };
   for (int i = 0; i < 3; ++i) {
     String candidatePath;
     if (candidates[i]) candidatePath = String(candidates[i]) + path;
