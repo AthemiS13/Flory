@@ -1,6 +1,8 @@
 // -------------------- HTTP handlers --------------------
 #include "globals.h"
 #include <ESPmDNS.h>
+#include <SD.h>
+
 void handleStatus() {
   DynamicJsonDocument doc(256);
   LOCK_STATE();
@@ -129,67 +131,121 @@ void handlePumpPost() {
   }
   String action = doc["action"].as<String>();
   if (action == "start") {
-    int duration = pumpDurationMs;
-    if (doc.containsKey("durationMs")) duration = doc["durationMs"].as<int>();
-    startPumpMs(duration);
+    int ms = pumpDurationMs;
+    if (doc.containsKey("durationMs")) ms = doc["durationMs"].as<int>();
+    startPumpMs(ms);
     server.send(200, "application/json", "{\"ok\":true}");
   } else if (action == "stop") {
     stopPumpImmediate();
     server.send(200, "application/json", "{\"ok\":true}");
-  } else server.send(400, "application/json", "{\"error\":\"unknown action\"}");
+  } else {
+    server.send(400, "application/json", "{\"error\":\"unknown action\"}");
+  }
 }
 
-// restart
+// restart endpoint
 void handleRestart() {
   server.send(200, "application/json", "{\"ok\":true}");
-  delay(100);
+  delay(500);
   ESP.restart();
 }
 
-// --- Static file serving from SD card ---------------------------------
-#include <SD.h>
-
-String getContentType(const String &filename) {
-  if (filename.endsWith(".htm") || filename.endsWith(".html")) return "text/html";
-  if (filename.endsWith(".css")) return "text/css";
-  if (filename.endsWith(".js")) return "application/javascript";
-  if (filename.endsWith(".png")) return "image/png";
-  if (filename.endsWith(".jpg") || filename.endsWith(".jpeg")) return "image/jpeg";
-  if (filename.endsWith(".ico")) return "image/x-icon";
-  if (filename.endsWith(".svg")) return "image/svg+xml";
-  if (filename.endsWith(".json")) return "application/json";
-  if (filename.endsWith(".txt")) return "text/plain";
-  if (filename.endsWith(".csv")) return "text/csv";
+// Helper: determine content type from file extension
+String getContentType(const String& path) {
+  if (path.endsWith(".html")) return "text/html";
+  else if (path.endsWith(".css")) return "text/css";
+  else if (path.endsWith(".js")) return "application/javascript";
+  else if (path.endsWith(".json")) return "application/json";
+  else if (path.endsWith(".png")) return "image/png";
+  else if (path.endsWith(".jpg") || path.endsWith(".jpeg")) return "image/jpeg";
+  else if (path.endsWith(".gif")) return "image/gif";
+  else if (path.endsWith(".svg")) return "image/svg+xml";
+  else if (path.endsWith(".ico")) return "image/x-icon";
+  else if (path.endsWith(".txt")) return "text/plain";
   return "application/octet-stream";
 }
+
+// Static file serving with compression support
 bool handleFileRead() {
   String path = server.uri();
-  if (path == "/") path = "/index.html";
-  if (path.endsWith("/")) path += "index.html";
-  Serial.printf("Web request for: %s\n", path.c_str());
+  Serial.printf("handleFileRead: %s\n", path.c_str());
 
-  // Try a few candidate locations on the SD card. Prefer `/app` where
-  // the emergency uploader writes files. Fallback to root or `/out`.
-  const char* candidates[] = { "/app", nullptr, "/app/out" };
-  for (int i = 0; i < 3; ++i) {
-    String candidatePath;
-    if (candidates[i]) candidatePath = String(candidates[i]) + path;
-    else candidatePath = path;
-
-    Serial.printf("  trying: %s\n", candidatePath.c_str());
-    if (!SD.exists(candidatePath.c_str())) continue;
-    File file = SD.open(candidatePath.c_str());
-    if (!file) {
-      Serial.printf("  exists but failed to open: %s\n", candidatePath.c_str());
-      continue;
-    }
-    String contentType = getContentType(candidatePath);
-    Serial.printf("  serving: %s\n", candidatePath.c_str());
-    server.streamFile(file, contentType.c_str());
-    file.close();
-    return true;
+  // Check Accept-Encoding header for br and gzip support
+  bool brOk = false;
+  bool gzipOk = false;
+  if (server.hasHeader("Accept-Encoding")) {
+    String enc = server.header("Accept-Encoding");
+    brOk = enc.indexOf("br") >= 0;
+    gzipOk = enc.indexOf("gzip") >= 0;
   }
-  return false;
+
+  // Build the file path directly from /app/out
+  String filePath;
+  if (path == "/") {
+    filePath = "/app/out/index.html";
+  } else {
+    filePath = String("/app/out") + path;
+  }
+
+  // Check for compressed versions: prefer br, then gz, then original
+  String servePath;
+  String contentEncoding = "";
+  String brPath = filePath + ".br";
+  String gzPath = filePath + ".gz";
+  
+  if (brOk && SD.exists(brPath.c_str())) {
+    servePath = brPath;
+    contentEncoding = "br";
+  } else if (gzipOk && SD.exists(gzPath.c_str())) {
+    servePath = gzPath;
+    contentEncoding = "gzip";
+  } else if (SD.exists(filePath.c_str())) {
+    servePath = filePath;
+    contentEncoding = "";
+  } else {
+    Serial.printf("File not found: %s\n", filePath.c_str());
+    return false;
+  }
+
+  File file = SD.open(servePath.c_str());
+  if (!file) {
+    Serial.printf("Failed to open: %s\n", servePath.c_str());
+    return false;
+  }
+  
+  String contentType = getContentType(filePath);
+
+  // ETag: simple size-based tag for caching
+  String etag = String("\"") + String(file.size(), HEX) + String("\"");
+  if (server.hasHeader("If-None-Match")) {
+    String inm = server.header("If-None-Match");
+    if (inm == etag) {
+      server.sendHeader("ETag", etag);
+      server.send(304);
+      file.close();
+      return true;
+    }
+  }
+
+  // Set headers for optimal performance
+  if (contentEncoding.length() > 0) {
+    server.sendHeader("Content-Encoding", contentEncoding);
+  }
+  server.sendHeader("Vary", "Accept-Encoding");
+  server.sendHeader("ETag", etag);
+  server.sendHeader("Connection", "keep-alive");
+  
+  // Aggressive caching for static assets, no-cache for HTML
+  if (filePath.endsWith(".html")) {
+    server.sendHeader("Cache-Control", "no-cache, must-revalidate");
+  } else {
+    server.sendHeader("Cache-Control", "public, max-age=31536000, immutable");
+  }
+
+  Serial.printf("Serving: %s (%s)\n", servePath.c_str(), contentEncoding.length() > 0 ? contentEncoding.c_str() : "uncompressed");
+  server.streamFile(file, contentType.c_str());
+  file.close();
+  return true;
 }
 
 // Debug: list SD root contents as JSON

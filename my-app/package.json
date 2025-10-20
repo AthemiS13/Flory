@@ -5,6 +5,8 @@
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
+    "compress": "node compress-build.js",
+    "build:full": "next build --turbopack && node compress-build.js",
     "start": "next start",
     "export": "next export"
   },
