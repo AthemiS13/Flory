@@ -48,6 +48,8 @@ SemaphoreHandle_t stateMutex;
 volatile bool pumpState = false;
 unsigned long pumpManualUntil = 0;
 unsigned long pumpAutoUntil = 0;
+// cooldown until (millis) during which auto-watering is suppressed after a trigger
+unsigned long autoWaterCooldownUntil = 0;
 
 // Pump task
 TaskHandle_t pumpTaskHandle = NULL;

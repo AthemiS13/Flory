@@ -120,13 +120,21 @@ void sensorTask(void* pvParameters) {
       float curSoil = lastSoilPercent;
       UNLOCK_STATE();
 
-        if (!inDeadzone && !alreadyAuto && curSoil < wateringThreshold) {
-        // start auto pump
+        // Also respect an auto-watering cooldown to prevent repeated triggers
         LOCK_STATE();
-        pumpAutoUntil = millis() + (unsigned long)pumpDurationMs;
+        bool cooldownActive = (autoWaterCooldownUntil != 0 && millis() <= autoWaterCooldownUntil);
         UNLOCK_STATE();
-        Serial.printf("Auto-watering triggered: soil=%.1f < threshold=%.1f\n", curSoil, wateringThreshold);
-      }
+
+        if (!inDeadzone && !alreadyAuto && !cooldownActive && curSoil < wateringThreshold) {
+          // start auto pump
+          unsigned long now = millis();
+          LOCK_STATE();
+          pumpAutoUntil = now + (unsigned long)pumpDurationMs;
+          // set cooldown to 60s after the pump stops
+          autoWaterCooldownUntil = pumpAutoUntil + 60000UL; // 60000 ms = 1 minute
+          UNLOCK_STATE();
+          Serial.printf("Auto-watering triggered: soil=%.1f < threshold=%.1f (cooldown until %lu)\n", curSoil, wateringThreshold, autoWaterCooldownUntil);
+        }
       }
     }
 
