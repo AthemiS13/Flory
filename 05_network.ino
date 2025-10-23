@@ -393,10 +393,25 @@ void networkTask(void* parameter) {
 
   startOTAwithPassword();
   // start mDNS so the device is discoverable as <otaHostname>.local
-  if (MDNS.begin(otaHostname.c_str())) {
-    Serial.printf("mDNS responder started: %s.local\n", otaHostname.c_str());
+  // Be defensive: print hostname/IP, retry once if begin() fails, and report details.
+  String mdnsHost = otaHostname;
+  if (mdnsHost.length() == 0) {
+    // fallback to a sensible default
+    mdnsHost = String("flory");
+  }
+  Serial.printf("mDNS: attempting to start with hostname='%s' IP=%s\n", mdnsHost.c_str(), WiFi.localIP().toString().c_str());
+  bool mdnsStarted = MDNS.begin(mdnsHost.c_str());
+  if (!mdnsStarted) {
+    // try to stop any leftover responder and try once more
+    Serial.println("mDNS: initial begin() failed, trying MDNS.end() and retrying");
+    MDNS.end();
+    delay(100);
+    mdnsStarted = MDNS.begin(mdnsHost.c_str());
+  }
+  if (mdnsStarted) {
+    Serial.printf("mDNS responder started: %s.local\n", mdnsHost.c_str());
   } else {
-    Serial.println("mDNS start failed");
+    Serial.printf("mDNS start failed (hostname='%s', IP=%s)\n", mdnsHost.c_str(), WiFi.localIP().toString().c_str());
   }
   startWebRoutes();
 
