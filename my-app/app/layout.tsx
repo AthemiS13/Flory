@@ -8,11 +8,13 @@ export const metadata: Metadata = {
 }
 
 import Sidebar from '../components/Sidebar';
+import DeviceIpInitializer from '../components/DeviceIpInitializer.client'
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <body className={`${inter.variable} font-sans bg-bg text-fg`}>
+        <DeviceIpInitializer />
         <div className="container-dashboard">
           <Sidebar />
           <main>{children}</main>

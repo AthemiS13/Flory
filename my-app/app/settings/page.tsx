@@ -3,6 +3,7 @@
 import * as React from "react"
 import { Minus, Plus } from "lucide-react"
 import { Switch } from "@/components/ui/switch"
+import api from '../../lib/api'
 
 function IconButton({ onClick, children, aria }: { onClick?: () => void; children: React.ReactNode; aria?: string }) {
   const intervalRef = React.useRef<NodeJS.Timeout | null>(null)
@@ -83,6 +84,8 @@ export default function SettingsPage() {
   const [sensorUpdateIntervalSec, setSensorUpdateIntervalSec] = React.useState(30)
   const [otaHostname, setOtaHostname] = React.useState('')
   const [otaPassword, setOtaPassword] = React.useState('')
+  const [saving, setSaving] = React.useState(false)
+  const [saveMessage, setSaveMessage] = React.useState<string | null>(null)
 
   function adjustPump(by: number) {
     setPumpDurationMs((v) => Math.max(0, Math.min(10000, v + by)))
@@ -121,6 +124,37 @@ export default function SettingsPage() {
     const container = document.querySelector('.double-range') as HTMLDivElement | null
     updateDoubleRangeBg(container, deadzoneRef.current, deadzoneRef2.current)
   }, [wateringThreshold, pumpDurationMs, pumpPwmDuty, deadzonePMHour, deadzoneAMHour, loggingIntervalMin, sensorUpdateIntervalSec])
+
+  // load settings from device
+  React.useEffect(() => {
+    let mounted = true
+    async function load() {
+      try {
+        const s = await api.getSettings()
+        if (!mounted) return
+        if (s.autoWaterEnabled != null) setAutoWaterEnabled(Boolean(s.autoWaterEnabled))
+        if (s.wateringThreshold != null) setWateringThreshold(Math.round(s.wateringThreshold))
+        if (s.pumpDurationMs != null) setPumpDurationMs(s.pumpDurationMs)
+        if (s.pumpPwmDuty != null) setPumpPwmDuty(s.pumpPwmDuty)
+        if (s.deadzoneEnabled != null) setDeadzoneEnabled(Boolean(s.deadzoneEnabled))
+        if (s.deadzoneStartHour != null) {
+          const start = s.deadzoneStartHour >= 12 ? s.deadzoneStartHour - 12 : s.deadzoneStartHour
+          setDeadzonePMHour(start % 12)
+        }
+        if (s.deadzoneEndHour != null) {
+          setDeadzoneAMHour(s.deadzoneEndHour % 12)
+        }
+        if (s.loggingIntervalMs != null) setLoggingIntervalMin(Math.max(1, Math.round(s.loggingIntervalMs / 60000)))
+        if (s.sensorUpdateInterval != null) setSensorUpdateIntervalSec(s.sensorUpdateInterval)
+        if (s.otaHostname) setOtaHostname(s.otaHostname)
+        if (s.otaPassword) setOtaPassword(s.otaPassword)
+      } catch (err) {
+        console.warn('load settings failed', err)
+      }
+    }
+    load()
+    return () => { mounted = false }
+  }, [])
 
   function updateDoubleRangeBg(container: HTMLDivElement | null, a: HTMLInputElement | null, b: HTMLInputElement | null) {
     if (!container || !a || !b) return
@@ -368,7 +402,40 @@ export default function SettingsPage() {
 
             <div className="settings-card-footer">
               <div>
-                <button className="ui-button" style={{ width: '100%', padding: '12px 18px', marginTop: 6 }}>Save Settings</button>
+                <button
+                  className="ui-button"
+                  style={{ width: '100%', padding: '12px 18px', marginTop: 6 }}
+                  onClick={async () => {
+                    setSaving(true)
+                    setSaveMessage(null)
+                    try {
+                      const payload: any = {
+                        autoWaterEnabled,
+                        wateringThreshold,
+                        pumpDurationMs,
+                        pumpPwmDuty,
+                        deadzoneEnabled,
+                        deadzoneStartHour: (deadzonePMHour + 12) % 24,
+                        deadzoneEndHour: deadzoneAMHour % 24,
+                        loggingIntervalMs: loggingIntervalMin * 60000,
+                        sensorUpdateInterval: sensorUpdateIntervalSec,
+                        otaHostname,
+                        otaPassword,
+                      }
+                      await api.postSettings(payload)
+                      setSaveMessage('Saved')
+                    } catch (err) {
+                      console.error(err)
+                      setSaveMessage('Save failed')
+                    } finally {
+                      setSaving(false)
+                      setTimeout(() => setSaveMessage(null), 3000)
+                    }
+                  }}
+                >
+                  {saving ? 'Saving…' : 'Save Settings'}
+                </button>
+                {saveMessage ? <div style={{marginTop:8,fontSize:13}}>{saveMessage}</div> : null}
               </div>
             </div>
           </div>

@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import api from '../../lib/api'
 
 export default function CalibrationPage() {
   const [waterCalibration, setWaterCalibration] = React.useState({
@@ -42,9 +43,49 @@ export default function CalibrationPage() {
   }
 
   const saveSettings = () => {
-    // TODO: Implement save functionality
-    console.log('Saving calibration settings:', { waterCalibration, soilCalibration })
+    // send minimal calibration payload back to device
+    const payload: any = {}
+    // map waterCalibration into expected `water_map` format if possible
+  const keys = [0,20,40,60,80,100]
+  const map = keys.map(k => ({ raw: Number((waterCalibration as any)[k]), percent: k }))
+    payload.water_map = map
+    // soil calibration
+    if (soilCalibration.dry) payload.soilDryRaw = soilCalibration.dry
+    if (soilCalibration.normal) payload.soilBaseline = soilCalibration.normal
+    if (soilCalibration.wet) payload.soilWetRaw = soilCalibration.wet
+    // post to settings endpoint (calibration lives under same prefs)
+    api.postSettings(payload).then(() => {
+      console.log('Calibration saved')
+    }).catch(err => {
+      console.error('Calibration save failed', err)
+    })
   }
+
+  React.useEffect(() => {
+    let mounted = true
+    async function load() {
+      try {
+        const c = await api.getCalibration()
+        if (!mounted) return
+        // map values into UI
+        if (c.water_map && c.water_map.length) {
+          const wc: any = {}
+          c.water_map.forEach((it) => { wc[Math.round(it.percent)] = it.raw })
+          setWaterCalibration((prev) => ({ ...prev, ...wc }))
+        }
+  if (c.soilDryRaw != null) setSoilCalibration((s) => ({ ...s, dry: c.soilDryRaw as number }))
+  if (c.soilWetRaw != null) setSoilCalibration((s) => ({ ...s, wet: c.soilWetRaw as number }))
+  if (c.soilBaseline != null) setSoilCalibration((s) => ({ ...s, normal: c.soilBaseline as number }))
+  if (c.last_water_raw != null) setCurrentReadings((r) => ({ ...r, waterRaw: c.last_water_raw as number }))
+  if (c.last_soil_raw != null) setCurrentReadings((r) => ({ ...r, soilRaw: c.last_soil_raw as number }))
+      } catch (err) {
+        console.warn('load calibration failed', err)
+      }
+    }
+    load()
+    return () => { mounted = false }
+  }, [])
+
 
   return (
     <div className="settings-page-container">
