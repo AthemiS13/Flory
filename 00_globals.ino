@@ -79,3 +79,12 @@ String otaPassword = "";
 
 // -------------------- Server --------------------
 WebServer server(80);
+
+// Helper: safe expiry check that handles millis() wrap-around.
+// Returns true if the given absolute expiry time is still in the future.
+inline bool timeNotExpired(unsigned long expiry) {
+  if (expiry == 0) return false;
+  // Use signed subtraction to handle unsigned wrap-around correctly for intervals
+  // shorter than 2^31 ms (~24.8 days). This is the common Arduino idiom.
+  return (long)(expiry - millis()) > 0;
+}

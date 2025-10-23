@@ -115,15 +115,15 @@ void sensorTask(void* pvParameters) {
       }
 
       // check and trigger auto-watering under lock
-      LOCK_STATE();
-      bool alreadyAuto = (pumpAutoUntil != 0 && millis() <= pumpAutoUntil);
-      float curSoil = lastSoilPercent;
-      UNLOCK_STATE();
+  LOCK_STATE();
+  bool alreadyAuto = timeNotExpired(pumpAutoUntil);
+  float curSoil = lastSoilPercent;
+  UNLOCK_STATE();
 
         // Also respect an auto-watering cooldown to prevent repeated triggers
-        LOCK_STATE();
-        bool cooldownActive = (autoWaterCooldownUntil != 0 && millis() <= autoWaterCooldownUntil);
-        UNLOCK_STATE();
+  LOCK_STATE();
+  bool cooldownActive = timeNotExpired(autoWaterCooldownUntil);
+  UNLOCK_STATE();
 
         if (!inDeadzone && !alreadyAuto && !cooldownActive && curSoil < wateringThreshold) {
           // start auto pump

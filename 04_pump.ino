@@ -36,40 +36,46 @@ void pumpTask(void* pvParameters) {
     unsigned long now = millis();
     bool shouldOn = false;
     LOCK_STATE();
-    // evaluate manual timeout
-    if (pumpManualUntil != 0) {
-      if (now <= pumpManualUntil) {
-        shouldOn = true;
-      } else {
-        // timeout expired — clear
-        pumpManualUntil = 0;
-      }
+    // evaluate manual timeout (safe across millis() wrap)
+    if (timeNotExpired(pumpManualUntil)) {
+      shouldOn = true;
+    } else {
+      pumpManualUntil = 0;
     }
-    // evaluate auto timeout
-    if (pumpAutoUntil != 0) {
-      if (now <= pumpAutoUntil) {
-        shouldOn = true;
-      } else {
-        pumpAutoUntil = 0;
-      }
+    // evaluate auto timeout (safe across millis() wrap)
+    if (timeNotExpired(pumpAutoUntil)) {
+      shouldOn = true;
+    } else {
+      pumpAutoUntil = 0;
     }
     // perform LEDC writes and update pumpState here to avoid races
+    // Soft-start: ramp duty up over several steps to avoid huge inrush/EMI.
+    const int RAMP_STEPS = 20; // number of ramp steps (~RAMP_STEPS * 10ms = ramp duration)
     if (shouldOn) {
       if (!pumpState) {
-        // turning on
-        ledcWrite(PUMP_PIN, pumpPwmDuty);
-        lastAppliedDuty = pumpPwmDuty;
+        // turning on: initialize with 0 duty and start ramping
+        ledcWrite(PUMP_PIN, 0);
+        lastAppliedDuty = 0;
         pumpState = true;
-      } else {
-        // already on: if duty changed, reapply
-        if (pumpPwmDuty != lastAppliedDuty) {
-          ledcWrite(PUMP_PIN, pumpPwmDuty);
-          lastAppliedDuty = pumpPwmDuty;
-        }
+      }
+      // Ramp towards target duty
+      if (lastAppliedDuty < pumpPwmDuty) {
+        int step = max(1, pumpPwmDuty / RAMP_STEPS);
+        int next = lastAppliedDuty + step;
+        if (next > pumpPwmDuty) next = pumpPwmDuty;
+        ledcWrite(PUMP_PIN, next);
+        lastAppliedDuty = next;
+      } else if (lastAppliedDuty > pumpPwmDuty) {
+        // step down if duty decreased
+        int step = max(1, lastAppliedDuty / RAMP_STEPS);
+        int next = lastAppliedDuty - step;
+        if (next < pumpPwmDuty) next = pumpPwmDuty;
+        ledcWrite(PUMP_PIN, next);
+        lastAppliedDuty = next;
       }
     } else {
       if (pumpState) {
-        // turning off
+        // turning off: immediately stop to be safe
         ledcWrite(PUMP_PIN, 0);
         lastAppliedDuty = -1;
         pumpState = false;
