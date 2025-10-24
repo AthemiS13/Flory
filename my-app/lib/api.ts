@@ -104,6 +104,12 @@ export async function postPump(action: 'start' | 'stop', durationMs?: number): P
   })
 }
 
+export async function postRestart(): Promise<{ ok: boolean }> {
+  return fetchJson('/api/restart', {
+    method: 'POST',
+  })
+}
+
 export default {
   getStatus,
   getSettings,
@@ -111,5 +117,6 @@ export default {
   getCalibration,
   postCalibration,
   postPump,
+  postRestart,
   setDeviceBaseUrl,
 }

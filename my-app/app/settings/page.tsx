@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Minus, Plus } from "lucide-react"
+import { Minus, Plus, Check } from "lucide-react"
 import { Switch } from "@/components/ui/switch"
 import api from '../../lib/api'
 
@@ -85,7 +85,14 @@ export default function SettingsPage() {
   const [otaHostname, setOtaHostname] = React.useState('')
   const [otaPassword, setOtaPassword] = React.useState('')
   const [saving, setSaving] = React.useState(false)
-  const [saveMessage, setSaveMessage] = React.useState<string | null>(null)
+  const [saveSuccess, setSaveSuccess] = React.useState(false)
+  const [saveError, setSaveError] = React.useState<string | null>(null)
+
+  const [testPumpRunning, setTestPumpRunning] = React.useState(false)
+  const [testPumpSuccess, setTestPumpSuccess] = React.useState(false)
+  const [testPumpError, setTestPumpError] = React.useState<string | null>(null)
+
+  const [restarting, setRestarting] = React.useState(false)
 
   function adjustPump(by: number) {
     setPumpDurationMs((v) => Math.max(0, Math.min(10000, v + by)))
@@ -394,8 +401,48 @@ export default function SettingsPage() {
               <div>
                 <div style={{ color: 'var(--fg)', marginBottom: 8, fontSize: 15 }}>Device</div>
                 <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
-                  <button className="ui-button" style={{ flex: 1 }}>Test Pump</button>
-                  <button className="ui-button" style={{ flex: 1 }}>Restart</button>
+                    <button
+                      className="ui-button"
+                      style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+                      onClick={async () => {
+                        setTestPumpRunning(true)
+                        setTestPumpError(null)
+                        try {
+                          await api.postPump('start', pumpDurationMs)
+                          setTestPumpSuccess(true)
+                          setTimeout(() => setTestPumpSuccess(false), 3000)
+                        } catch (err: any) {
+                          console.error('test pump failed', err)
+                          setTestPumpError('Failed')
+                          setTimeout(() => setTestPumpError(null), 3000)
+                        } finally {
+                          setTestPumpRunning(false)
+                        }
+                      }}
+                      disabled={testPumpRunning || restarting}
+                    >
+                      {testPumpRunning ? 'Running…' : testPumpSuccess ? <><Check size={14} /> Done</> : testPumpError ? testPumpError : 'Test Pump'}
+                    </button>
+
+                    <button
+                      className="ui-button"
+                      style={{ flex: 1 }}
+                      onClick={async () => {
+                        // Attempt to restart device via API
+                        setRestarting(true)
+                        try {
+                          await api.postRestart()
+                          // The device will restart; keep button disabled and show restart text
+                        } catch (err) {
+                          console.error('restart failed', err)
+                          // Allow re-try
+                          setRestarting(false)
+                        }
+                      }}
+                      disabled={restarting}
+                    >
+                      {restarting ? 'Restarting…' : 'Restart'}
+                    </button>
                 </div>
               </div>
             </div>
@@ -404,10 +451,10 @@ export default function SettingsPage() {
               <div>
                 <button
                   className="ui-button"
-                  style={{ width: '100%', padding: '12px 18px', marginTop: 6 }}
+                  style={{ width: '100%', padding: '12px 18px', marginTop: 6, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
                   onClick={async () => {
                     setSaving(true)
-                    setSaveMessage(null)
+                    setSaveError(null)
                     try {
                       const payload: any = {
                         autoWaterEnabled,
@@ -423,19 +470,19 @@ export default function SettingsPage() {
                         otaPassword,
                       }
                       await api.postSettings(payload)
-                      setSaveMessage('Saved')
-                    } catch (err) {
+                      setSaveSuccess(true)
+                      setTimeout(() => setSaveSuccess(false), 3000)
+                    } catch (err: any) {
                       console.error(err)
-                      setSaveMessage('Save failed')
+                      setSaveError('Save failed')
+                      setTimeout(() => setSaveError(null), 3000)
                     } finally {
                       setSaving(false)
-                      setTimeout(() => setSaveMessage(null), 3000)
                     }
                   }}
                 >
-                  {saving ? 'Saving…' : 'Save Settings'}
+                  {saving ? 'Saving…' : saveSuccess ? <><Check size={16} /> Saved</> : saveError ? saveError : 'Save Settings'}
                 </button>
-                {saveMessage ? <div style={{marginTop:8,fontSize:13}}>{saveMessage}</div> : null}
               </div>
             </div>
           </div>

@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import api from '../../lib/api'
+import { Check } from 'lucide-react'
 
 export default function CalibrationPage() {
   const [waterCalibration, setWaterCalibration] = React.useState({
@@ -54,12 +55,49 @@ export default function CalibrationPage() {
     if (soilCalibration.normal) payload.soilBaseline = soilCalibration.normal
     if (soilCalibration.wet) payload.soilWetRaw = soilCalibration.wet
     // post to settings endpoint (calibration lives under same prefs)
-    api.postSettings(payload).then(() => {
-      console.log('Calibration saved')
+    setSaving(true)
+    setSaveError(null)
+    api.postCalibration(payload).then(() => {
+      setSaved(true)
+      setTimeout(() => setSaved(false), 3000)
     }).catch(err => {
       console.error('Calibration save failed', err)
-    })
+      setSaveError('Save failed')
+      setTimeout(() => setSaveError(null), 3000)
+    }).finally(() => setSaving(false))
   }
+
+  const [saving, setSaving] = React.useState(false)
+  const [saved, setSaved] = React.useState(false)
+  const [saveError, setSaveError] = React.useState<string | null>(null)
+
+  // poll status for live percentages and temp/humidity
+  React.useEffect(() => {
+    let mounted = true
+    let timer: any = null
+    async function poll() {
+      try {
+        // Fetch live status (percentages) and calibration (raw last readings) in parallel
+        const [s, c] = await Promise.all([api.getStatus(), api.getCalibration()])
+        if (!mounted) return
+        setCurrentReadings((r) => ({
+          ...r,
+          waterPercentage: s && typeof s.water_percent === 'number' ? Math.round(s.water_percent) : r.waterPercentage,
+          soilPercentage: s && typeof s.soil_percent === 'number' ? Math.round(s.soil_percent) : r.soilPercentage,
+          temperature: s && typeof s.temperature === 'number' ? s.temperature : r.temperature,
+          humidity: s && typeof s.humidity === 'number' ? s.humidity : r.humidity,
+          waterRaw: c && typeof c.last_water_raw === 'number' ? c.last_water_raw : r.waterRaw,
+          soilRaw: c && typeof c.last_soil_raw === 'number' ? c.last_soil_raw : r.soilRaw,
+        }))
+      } catch (err) {
+        // ignore polling errors
+      } finally {
+        if (mounted) timer = setTimeout(poll, 3000)
+      }
+    }
+    poll()
+    return () => { mounted = false; if (timer) clearTimeout(timer) }
+  }, [])
 
   React.useEffect(() => {
     let mounted = true
@@ -311,9 +349,10 @@ export default function CalibrationPage() {
                 <button 
                   onClick={saveSettings}
                   className="ui-button" 
-                  style={{ width: '100%', padding: '12px 18px', marginTop: 6 }}
+                  style={{ width: '100%', padding: '12px 18px', marginTop: 6, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+                  disabled={saving}
                 >
-                  Save Settings
+                  {saving ? 'Saving…' : saved ? <><Check size={14} /> Saved</> : saveError ? saveError : 'Save Settings'}
                 </button>
               </div>
             </div>
