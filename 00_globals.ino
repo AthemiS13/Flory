@@ -50,6 +50,9 @@ unsigned long pumpManualUntil = 0;
 unsigned long pumpAutoUntil = 0;
 // cooldown until (millis) during which auto-watering is suppressed after a trigger
 unsigned long autoWaterCooldownUntil = 0;
+// Pump activity counters since last log write
+volatile unsigned long pumpActivationCountSinceLog = 0;
+volatile unsigned long pumpOnMsSinceLog = 0;
 
 // Pump task
 TaskHandle_t pumpTaskHandle = NULL;

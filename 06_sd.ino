@@ -96,7 +96,7 @@ void sdTruncateLogFile() {
   File f2 = SD.open("/log/log.txt", FILE_WRITE);
   if (f2) {
     // write header row to newly-created log
-    f2.println("timestamp,soilPercent,waterPercent,temp,hum,pumpOn,timeSynced");
+  f2.println("timestamp,soilPercent,waterPercent,temp,hum,pumpOn,timeSynced,pumpActivations,pumpOnMs");
     #if defined(ARDUINO_ARCH_ESP32)
     f2.flush();
     #endif

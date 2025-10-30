@@ -154,8 +154,10 @@ Static file serving
 Path: `/log/log.txt` (single file strategy)
 - Each log entry is a single CSV line appended at the interval `loggingIntervalMs` (default 60000 ms).
 Line format:
-  timestamp,soilPercent,waterPercent,temp,hum,pumpOn,timeSynced
-Note: the firmware writes a CSV header row to `/log/log.txt` whenever the file is created or truncated. Parsers should skip the first line if present.
+  timestamp,soilPercent,waterPercent,temp,hum,pumpOn,timeSynced,pumpActivations,pumpOnMs
+Notes:
+  - `pumpActivations` and `pumpOnMs` are present on newer firmware. Older logs may only have the first 7 columns; clients should parse these fields as optional.
+  - The firmware writes a CSV header row to `/log/log.txt` whenever the file is created or truncated. Parsers should skip the first line if present.
 Field meanings:
   - timestamp: "YYYY-MM-DD HH:MM:SS" when NTP/time available, otherwise "ms:<millis>"
   - soilPercent: float 0..100 (computed from calibrated mapping; no raw ADC value is logged)
@@ -164,6 +166,8 @@ Field meanings:
   - hum: float humidity % (if available)
   - pumpOn: 1 if pump currently on, 0 otherwise
   - timeSynced: 1 if exact NTP/local time was available when writing, else 0
+  - pumpActivations: number of pump ON events (false→true transitions) that occurred since the previous log line
+  - pumpOnMs: total milliseconds the pump was ON since the previous log line
 - Rollover behavior:
   - When the device detects a month change (based on local time) it truncates `/log/log.txt` so the new month starts with an empty `log.txt`.
   - You can force truncation with `POST /api/logs/rollover`.

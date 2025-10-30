@@ -179,18 +179,23 @@ void sensorTask(void* pvParameters) {
         }
       }
 
-  // build CSV line: timestamp,soilPercent,waterPercent,temp,hum,pumpOn,timeSynced
+  // build CSV line: timestamp,soilPercent,waterPercent,temp,hum,pumpOn,timeSynced,pumpActivations,pumpOnMs
       LOCK_STATE();
       bool pstate = pumpState;
       float spercent = lastSoilPercent;
       float wpercent = lastWaterPercent;
       float t = lastTemp;
       float h = lastHum;
+    // Snapshot and reset counters so new events count towards the next period
+    unsigned long activationCount = pumpActivationCountSinceLog;
+    unsigned long onMs = pumpOnMsSinceLog;
+    pumpActivationCountSinceLog = 0;
+    pumpOnMsSinceLog = 0;
       UNLOCK_STATE();
 
       char line[256];
-  // Add timeSynced flag (1 = exact NTP time, 0 = unknown/approx)
-  int len = snprintf(line, sizeof(line), "%s,%.1f,%.1f,%.1f,%.1f,%d,%d", timestr, spercent, wpercent, t, h, pstate ? 1 : 0, timeSynced ? 1 : 0);
+  // Add timeSynced flag (1 = exact NTP time, 0 = unknown/approx) and counters
+  int len = snprintf(line, sizeof(line), "%s,%.1f,%.1f,%.1f,%.1f,%d,%d,%lu,%lu", timestr, spercent, wpercent, t, h, pstate ? 1 : 0, timeSynced ? 1 : 0, activationCount, onMs);
       if (len > 0) {
         // append by opening FILE_WRITE (sdWriteText uses FILE_WRITE and println)
         String content = String(line);

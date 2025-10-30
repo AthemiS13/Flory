@@ -42,6 +42,11 @@ extern SemaphoreHandle_t stateMutex;
 extern volatile bool pumpState;
 extern unsigned long pumpManualUntil;
 extern unsigned long pumpAutoUntil;
+// Pump activity counters since the last periodic log write
+// - pumpActivationCountSinceLog: number of ON transitions (false -> true)
+// - pumpOnMsSinceLog: total milliseconds pump was ON
+extern volatile unsigned long pumpActivationCountSinceLog;
+extern volatile unsigned long pumpOnMsSinceLog;
 
 extern TaskHandle_t pumpTaskHandle;
 extern TaskHandle_t sensorTaskHandle;

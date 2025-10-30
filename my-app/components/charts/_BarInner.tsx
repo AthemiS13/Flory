@@ -37,29 +37,46 @@ function groupByDay(entries: LogEntry[], cutoff: Date): { label: string; count: 
     if (d < cutoff) return false
     return true
   })
-  
-  // Group by date string (YYYY-MM-DD) and count pump activations
+
+  // Sort by timestamp ascending for transition-based fallback
+  filtered.sort((a, b) => {
+    const da = parseDate(a.timestamp)!.getTime()
+    const db = parseDate(b.timestamp)!.getTime()
+    return da - db
+  })
+
+  // Group by date string (YYYY-MM-DD); prefer explicit activationCount when available
   const dayMap = new Map<string, number>()
-  
-  for (const entry of filtered) {
-    const d = parseDate(entry.timestamp)
-    if (!d) continue
-    const dayKey = d.toISOString().split('T')[0] // YYYY-MM-DD
-    if (entry.pumpOn) {
-      dayMap.set(dayKey, (dayMap.get(dayKey) || 0) + 1)
-    } else {
-      // ensure day exists even if pump was never on
+  const hasCounts = filtered.some(e => typeof e.activationCount === 'number')
+
+  if (hasCounts) {
+    for (const entry of filtered) {
+      const d = parseDate(entry.timestamp)
+      if (!d) continue
+      const dayKey = d.toISOString().split('T')[0]
+      const add = entry.activationCount ?? 0
+      dayMap.set(dayKey, (dayMap.get(dayKey) || 0) + add)
       if (!dayMap.has(dayKey)) dayMap.set(dayKey, 0)
     }
+  } else {
+    // Fallback: count rising edges (0 -> 1) across samples
+    let prevOn: boolean | null = null
+    for (const entry of filtered) {
+      const d = parseDate(entry.timestamp)
+      if (!d) continue
+      const dayKey = d.toISOString().split('T')[0]
+      if (!dayMap.has(dayKey)) dayMap.set(dayKey, 0)
+      if (prevOn === false && entry.pumpOn) {
+        dayMap.set(dayKey, (dayMap.get(dayKey) || 0) + 1)
+      }
+      prevOn = entry.pumpOn
+    }
   }
-  
+
   // Convert to array and sort by date
-  const arr = Array.from(dayMap.entries()).map(([date, count]) => ({
-    date,
-    count,
-  }))
+  const arr = Array.from(dayMap.entries()).map(([date, count]) => ({ date, count }))
   arr.sort((a, b) => a.date.localeCompare(b.date))
-  
+
   // Format labels as "Mon 1" or "Oct 1"
   return arr.map(({ date, count }) => {
     const d = new Date(date + 'T00:00:00')

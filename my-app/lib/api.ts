@@ -118,6 +118,9 @@ export type LogEntry = {
   hum: number
   pumpOn: boolean
   timeSynced: boolean
+  // Optional extended fields (firmware >= pump event logging)
+  activationCount?: number
+  pumpOnMs?: number
 }
 
 export async function getLogs(): Promise<LogEntry[]> {
@@ -139,9 +142,9 @@ export async function getLogs(): Promise<LogEntry[]> {
     if (line.startsWith('timestamp,')) continue
     
     const parts = line.split(',')
-    if (parts.length < 7) continue // need all 7 fields
-    
-    entries.push({
+    if (parts.length < 7) continue // need at least the original 7 fields
+
+    const base: LogEntry = {
       timestamp: parts[0],
       soilPercent: parseFloat(parts[1]) || 0,
       waterPercent: parseFloat(parts[2]) || 0,
@@ -149,7 +152,16 @@ export async function getLogs(): Promise<LogEntry[]> {
       hum: parseFloat(parts[4]) || 0,
       pumpOn: parts[5] === '1',
       timeSynced: parts[6] === '1',
-    })
+    }
+
+    if (parts.length >= 9) {
+      const activationCount = parseInt(parts[7], 10)
+      const pumpOnMs = parseInt(parts[8], 10)
+      if (!isNaN(activationCount)) base.activationCount = activationCount
+      if (!isNaN(pumpOnMs)) base.pumpOnMs = pumpOnMs
+    }
+
+    entries.push(base)
   }
   
   return entries

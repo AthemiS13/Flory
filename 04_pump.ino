@@ -32,8 +32,11 @@ void stopPumpImmediate() {
 // Pump control task: runs every 10ms, updates LEDC and pumpState under lock
 void pumpTask(void* pvParameters) {
   (void)pvParameters;
+  // Track elapsed time between iterations to accumulate ON duration
+  unsigned long prevMs = millis();
   for (;;) {
     unsigned long now = millis();
+    unsigned long delta = (unsigned long)(now - prevMs);
     bool shouldOn = false;
     LOCK_STATE();
     // evaluate manual timeout (safe across millis() wrap)
@@ -57,6 +60,8 @@ void pumpTask(void* pvParameters) {
         ledcWrite(PUMP_PIN, 0);
         lastAppliedDuty = 0;
         pumpState = true;
+        // Count rising edge as one activation
+        pumpActivationCountSinceLog++;
       }
       // Ramp towards target duty
       if (lastAppliedDuty < pumpPwmDuty) {
@@ -81,7 +86,12 @@ void pumpTask(void* pvParameters) {
         pumpState = false;
       }
     }
+    // Accumulate ON duration
+    if (pumpState) {
+      pumpOnMsSinceLog += delta;
+    }
     UNLOCK_STATE();
+    prevMs = now;
     vTaskDelay(pdMS_TO_TICKS(10));
   }
 }
