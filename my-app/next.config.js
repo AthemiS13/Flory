@@ -9,6 +9,9 @@ const deviceBase = (process.env.NEXT_PUBLIC_DEVICE_BASE_URL || process.env.DEVIC
 
 /** @type {import('next').NextConfig} */
 module.exports = {
+  // Produce a static export in `out/` when building. This replaces the removed
+  // `next export` CLI command in newer Next.js versions.
+  output: 'export',
   async rewrites() {
     // only proxy /api to the device in development; in production leave rewrites alone
     if (process.env.NODE_ENV === 'production') return []

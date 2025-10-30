@@ -80,8 +80,11 @@ export default function SettingsPage() {
   // This represents the overnight "do not disturb" period
   const [deadzonePMHour, setDeadzonePMHour] = React.useState(9) // 9 = 21:00 (12+9)
   const [deadzoneAMHour, setDeadzoneAMHour] = React.useState(7) // 7 = 07:00
-  const [loggingIntervalMin, setLoggingIntervalMin] = React.useState(40)
-  const [sensorUpdateIntervalSec, setSensorUpdateIntervalSec] = React.useState(30)
+  
+    // logging interval in seconds (5..7200)
+    const [loggingIntervalSec, setLoggingIntervalSec] = React.useState(2400)
+    // sensor update interval in milliseconds (100..300000)
+    const [sensorUpdateIntervalMs, setSensorUpdateIntervalMs] = React.useState(30000)
   const [otaHostname, setOtaHostname] = React.useState('')
   const [otaPassword, setOtaPassword] = React.useState('')
   const [saving, setSaving] = React.useState(false)
@@ -95,11 +98,15 @@ export default function SettingsPage() {
   const [restarting, setRestarting] = React.useState(false)
 
   function adjustPump(by: number) {
-    setPumpDurationMs((v) => Math.max(0, Math.min(10000, v + by)))
+    setPumpDurationMs((v) => Math.max(0, Math.min(5000, v + by)))
   }
 
   function adjustLogging(by: number) {
-    setLoggingIntervalMin((v) => Math.max(1, Math.min(120, v + by)))
+    setLoggingIntervalSec((v) => {
+      const newVal = v + by
+      // Clamp to 5 seconds minimum, 7200 seconds (2 hours) maximum
+      return Math.max(5, Math.min(7200, newVal))
+    })
   }
 
   // helper to set range background gradient: selected part is var(--fg), remainder is var(--bg)
@@ -130,7 +137,7 @@ export default function SettingsPage() {
     updateRangeBg(sensorRef.current)
     const container = document.querySelector('.double-range') as HTMLDivElement | null
     updateDoubleRangeBg(container, deadzoneRef.current, deadzoneRef2.current)
-  }, [wateringThreshold, pumpDurationMs, pumpPwmDuty, deadzonePMHour, deadzoneAMHour, loggingIntervalMin, sensorUpdateIntervalSec])
+  }, [wateringThreshold, pumpDurationMs, pumpPwmDuty, deadzonePMHour, deadzoneAMHour, loggingIntervalSec, sensorUpdateIntervalMs])
 
   // load settings from device
   React.useEffect(() => {
@@ -142,7 +149,11 @@ export default function SettingsPage() {
         if (s.autoWaterEnabled != null) setAutoWaterEnabled(Boolean(s.autoWaterEnabled))
         if (s.wateringThreshold != null) setWateringThreshold(Math.round(s.wateringThreshold))
         if (s.pumpDurationMs != null) setPumpDurationMs(s.pumpDurationMs)
-        if (s.pumpPwmDuty != null) setPumpPwmDuty(s.pumpPwmDuty)
+        if (s.pumpPwmDuty != null) {
+          // Device always stores duty as 0..255 (clamped to device resolution)
+          const v = Number(s.pumpPwmDuty)
+          setPumpPwmDuty(Math.max(0, Math.min(255, Math.round(v))))
+        }
         if (s.deadzoneEnabled != null) setDeadzoneEnabled(Boolean(s.deadzoneEnabled))
         if (s.deadzoneStartHour != null) {
           const start = s.deadzoneStartHour >= 12 ? s.deadzoneStartHour - 12 : s.deadzoneStartHour
@@ -151,8 +162,14 @@ export default function SettingsPage() {
         if (s.deadzoneEndHour != null) {
           setDeadzoneAMHour(s.deadzoneEndHour % 12)
         }
-        if (s.loggingIntervalMs != null) setLoggingIntervalMin(Math.max(1, Math.round(s.loggingIntervalMs / 60000)))
-        if (s.sensorUpdateInterval != null) setSensorUpdateIntervalSec(s.sensorUpdateInterval)
+        
+          // loggingIntervalMs stored in ms on device
+          if (s.loggingIntervalMs != null) setLoggingIntervalSec(Math.max(5, Math.round(Number(s.loggingIntervalMs) / 1000)))
+          // sensorUpdateInterval: device stores in milliseconds
+          if (s.sensorUpdateInterval != null) {
+            const v = Number(s.sensorUpdateInterval)
+            setSensorUpdateIntervalMs(Math.max(100, Math.min(300000, v)))
+          }
         if (s.otaHostname) setOtaHostname(s.otaHostname)
         if (s.otaPassword) setOtaPassword(s.otaPassword)
       } catch (err) {
@@ -225,7 +242,7 @@ export default function SettingsPage() {
                 ref={pumpRef}
                 type="range"
                 min={0}
-                max={10000}
+                max={5000}
                 value={pumpDurationMs}
                 className="picker-slider"
                 onChange={(e) => { setPumpDurationMs(Number(e.target.value)); updateRangeBg(e.target) }}
@@ -235,13 +252,14 @@ export default function SettingsPage() {
 
             <div>
               <div style={{ color: 'var(--fg)', marginBottom: 8, fontSize: 15 }}>Pump Speed</div>
-              <div style={{ textAlign: 'center', marginBottom: 8, color: 'var(--fg)', fontSize: 15 }}>{pumpPwmDuty}%</div>
+              <div style={{ textAlign: 'center', marginBottom: 8, color: 'var(--fg)', fontSize: 15 }}>{Math.round((pumpPwmDuty/255)*100)}%</div>
               <div>
                 <input
                   ref={speedRef}
                   type="range"
                   min={0}
-                  max={100}
+                  max={255}
+                  step={1}
                   value={pumpPwmDuty}
                   onChange={(e) => { setPumpPwmDuty(Number(e.target.value)); updateRangeBg(e.target) }}
                   onInput={(e) => updateRangeBg(e.currentTarget as HTMLInputElement)}
@@ -351,36 +369,42 @@ export default function SettingsPage() {
               <div>
                   <div style={{ color: 'var(--fg)', marginBottom: 8, fontSize: 15 }}>Logging Interval</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <IconButton onClick={() => adjustLogging(-1)} aria="decrease-logging"><Minus /></IconButton>
+                  <IconButton onClick={() => adjustLogging(-60)} aria="decrease-logging"><Minus /></IconButton>
                   <div style={{ textAlign: 'center', flex: 1 }}>
-                      <div style={{ fontSize: 56, fontWeight: 800, color: 'var(--fg)' }}>{loggingIntervalMin}</div>
-                    <div className="muted-50" style={{ fontSize: 12 }}>minutes</div>
+                      <div style={{ fontSize: 56, fontWeight: 800, color: 'var(--fg)' }}>{
+                        loggingIntervalSec >= 60 ? `${Math.round(loggingIntervalSec/60)}` : loggingIntervalSec
+                      }</div>
+                        <div className="muted-50" style={{ fontSize: 12 }}>{loggingIntervalSec >= 60 ? 'minutes' : 'seconds'}</div>
                   </div>
-                  <IconButton onClick={() => adjustLogging(1)} aria="increase-logging"><Plus /></IconButton>
+                  <IconButton onClick={() => adjustLogging(60)} aria="increase-logging"><Plus /></IconButton>
                 </div>
                 <input
                   ref={loggingRef}
                   type="range"
-                  min={1}
-                  max={120}
-                  value={loggingIntervalMin}
+                  min={5}
+                  max={7200}
+                  step={5}
+                  value={loggingIntervalSec}
                   className="picker-slider"
-                  onChange={(e) => { setLoggingIntervalMin(Number(e.target.value)); updateRangeBg(e.target) }}
+                  onChange={(e) => { setLoggingIntervalSec(Number(e.target.value)); updateRangeBg(e.target) }}
                   onInput={(e) => updateRangeBg(e.currentTarget as HTMLInputElement)}
                 />
               </div>
 
               <div>
                 <div style={{ color: 'var(--fg)', marginBottom: 8, fontSize: 15 }}>Sensor Update Interval</div>
-                <div style={{ textAlign: 'center', marginBottom: 8, color: 'var(--fg)', fontSize: 15 }}>{sensorUpdateIntervalSec}s</div>
+                <div style={{ textAlign: 'center', marginBottom: 8, color: 'var(--fg)', fontSize: 15 }}>{
+                  sensorUpdateIntervalMs < 1000 ? `${sensorUpdateIntervalMs} ms` : `${Math.round(sensorUpdateIntervalMs/1000)} s`
+                }</div>
                 <div>
                   <input
                     ref={sensorRef}
                     type="range"
-                    min={1}
-                    max={300}
-                    value={sensorUpdateIntervalSec}
-                    onChange={(e) => { setSensorUpdateIntervalSec(Number(e.target.value)); updateRangeBg(e.target) }}
+                    min={100}
+                    max={300000}
+                    step={100}
+                    value={sensorUpdateIntervalMs}
+                    onChange={(e) => { setSensorUpdateIntervalMs(Number(e.target.value)); updateRangeBg(e.target) }}
                     onInput={(e) => updateRangeBg(e.currentTarget as HTMLInputElement)}
                   />
                 </div>
@@ -464,12 +488,15 @@ export default function SettingsPage() {
                         deadzoneEnabled,
                         deadzoneStartHour: (deadzonePMHour + 12) % 24,
                         deadzoneEndHour: deadzoneAMHour % 24,
-                        loggingIntervalMs: loggingIntervalMin * 60000,
-                        sensorUpdateInterval: sensorUpdateIntervalSec,
+                        loggingIntervalMs: loggingIntervalSec * 1000,
+                        // sensorUpdateInterval: device unit ambiguous. We'll send milliseconds which matches the firmware preference field 'sensorUpdateInterval' if it's in ms.
+                        sensorUpdateInterval: sensorUpdateIntervalMs,
                         otaHostname,
                         otaPassword,
                       }
+
                       await api.postSettings(payload)
+
                       setSaveSuccess(true)
                       setTimeout(() => setSaveSuccess(false), 3000)
                     } catch (err: any) {

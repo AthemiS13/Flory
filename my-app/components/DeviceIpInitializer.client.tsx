@@ -19,7 +19,12 @@ export default function DeviceIpInitializer() {
         if (!base && typeof window !== 'undefined') {
           const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
           const isHttp = window.location.protocol === 'http:'
-          if (isLocalhost || isHttp) base = 'http://flory.local'
+          // Only default to the mDNS device name when running on localhost or
+          // when the current host is NOT the device itself. If the page is
+          // already served from flory.local, prefer relative paths so the
+          // client talks to the same origin (avoids stale stored overrides).
+          const servedFromDevice = window.location.hostname === 'flory.local'
+          if (isLocalhost || (isHttp && !servedFromDevice)) base = 'http://flory.local'
         }
       } catch (e) {}
       if (base) {

@@ -211,19 +211,48 @@ bool handleFileRead() {
   String contentEncoding = "";
   String brPath = filePath + ".br";
   String gzPath = filePath + ".gz";
-  
-  if (brOk && SD.exists(brPath.c_str())) {
-    servePath = brPath;
-    contentEncoding = "br";
-  } else if (gzipOk && SD.exists(gzPath.c_str())) {
-    servePath = gzPath;
-    contentEncoding = "gzip";
-  } else if (SD.exists(filePath.c_str())) {
-    servePath = filePath;
-    contentEncoding = "";
-  } else {
-    Serial.printf("File not found: %s\n", filePath.c_str());
+
+  // Helper lambda to check and select compressed/original file
+  auto chooseFile = [&](const String &candidate) -> bool {
+    String b = candidate + ".br";
+    String g = candidate + ".gz";
+    if (brOk && SD.exists(b.c_str())) {
+      servePath = b;
+      contentEncoding = "br";
+      return true;
+    }
+    if (gzipOk && SD.exists(g.c_str())) {
+      servePath = g;
+      contentEncoding = "gzip";
+      return true;
+    }
+    if (SD.exists(candidate.c_str())) {
+      servePath = candidate;
+      contentEncoding = "";
+      return true;
+    }
     return false;
+  };
+
+  // Try the exact path first
+  if (!chooseFile(filePath)) {
+    // Try common alternatives for clean URLs: append .html
+    String htmlPath = filePath + ".html";
+    if (!chooseFile(htmlPath)) {
+      // Try as directory index: /foo -> /foo/index.html
+      String idxPath = filePath;
+      if (!idxPath.endsWith("/")) idxPath += "/";
+      idxPath += "index.html";
+      if (!chooseFile(idxPath)) {
+        Serial.printf("File not found: %s\n", filePath.c_str());
+        return false;
+      } else {
+        // ensure contentType is detected from the real served file path
+        filePath = idxPath;
+      }
+    } else {
+      filePath = htmlPath;
+    }
   }
 
   File file = SD.open(servePath.c_str());
