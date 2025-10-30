@@ -24,6 +24,10 @@ void sendCors(int code, const char* contentType, const String& body) {
 
 void handleStatus() {
   DynamicJsonDocument doc(256);
+  Serial.println("[HTTP] GET /api/status received");
+  if (server.client()) {
+    Serial.printf("[HTTP] Client: %s\n", server.client().remoteIP().toString().c_str());
+  }
   LOCK_STATE();
   doc["soil_percent"] = lastSoilPercent;
   doc["water_percent"] = lastWaterPercent;
@@ -39,6 +43,8 @@ void handleStatus() {
 // calibration endpoint
 void handleCalibrationGet() {
   DynamicJsonDocument doc(1024);
+  Serial.println("[HTTP] GET /api/calibration received");
+  if (server.client()) Serial.printf("[HTTP] Client: %s\n", server.client().remoteIP().toString().c_str());
   LOCK_STATE();
   doc["soilBaseline"] = soilBaseline;
   doc["soilDryRaw"] = soilDryRaw;
@@ -74,11 +80,14 @@ void handleSettingsPost() {
   sendCors(405);
     return;
   }
+  Serial.println("[HTTP] POST /api/settings received");
+  if (server.client()) Serial.printf("[HTTP] Client: %s\n", server.client().remoteIP().toString().c_str());
   if (!server.hasArg("plain")) {
   sendCors(400, "application/json", "{\"error\":\"no body\"}");
     return;
   }
   String body = server.arg("plain");
+  Serial.printf("[HTTP] Body: %s\n", body.c_str());
   DynamicJsonDocument doc(2048);
   if (deserializeJson(doc, body)) {
   sendCors(400, "application/json", "{\"error\":\"invalid json\"}");
@@ -134,11 +143,14 @@ void handlePumpPost() {
   sendCors(405);
     return;
   }
+  Serial.println("[HTTP] POST /api/pump received");
+  if (server.client()) Serial.printf("[HTTP] Client: %s\n", server.client().remoteIP().toString().c_str());
   if (!server.hasArg("plain")) {
   sendCors(400, "application/json", "{\"error\":\"no body\"}");
     return;
   }
   String body = server.arg("plain");
+  Serial.printf("[HTTP] Body: %s\n", body.c_str());
   DynamicJsonDocument doc(256);
   if (deserializeJson(doc, body)) {
   sendCors(400, "application/json", "{\"error\":\"invalid json\"}");
@@ -216,6 +228,13 @@ bool handleFileRead() {
   auto chooseFile = [&](const String &candidate) -> bool {
     String b = candidate + ".br";
     String g = candidate + ".gz";
+    // Prefer the raw (uncompressed) candidate when present. Only fall back
+    // to precompressed variants if the original is missing.
+    if (SD.exists(candidate.c_str())) {
+      servePath = candidate;
+      contentEncoding = "";
+      return true;
+    }
     if (brOk && SD.exists(b.c_str())) {
       servePath = b;
       contentEncoding = "br";
@@ -224,11 +243,6 @@ bool handleFileRead() {
     if (gzipOk && SD.exists(g.c_str())) {
       servePath = g;
       contentEncoding = "gzip";
-      return true;
-    }
-    if (SD.exists(candidate.c_str())) {
-      servePath = candidate;
-      contentEncoding = "";
       return true;
     }
     return false;
