@@ -3,6 +3,7 @@
 import * as React from 'react'
 import ChartAreaInteractive from '../components/charts/ChartAreaInteractive.client'
 import ChartBarDefault from '../components/charts/ChartBarDefault.client'
+import ChartTempHum from '../components/charts/ChartTempHum.client'
 import Card from '../components/Card'
 import Gauge from '../components/Gauge.client'
 import api from '../lib/api'
@@ -44,10 +45,7 @@ export default function Home(){
       </div>
 
       <div className="col-span-2">
-        {/* Bar chart skipped per request - placeholder */}
-        <div className="card" style={{padding:24}}>
-          <div style={{fontSize:16,color:'var(--fg)'}}>Charts are disabled in this integration build</div>
-        </div>
+        <ChartBarDefault />
       </div>
 
       <div className="card">
@@ -76,16 +74,11 @@ export default function Home(){
         </div>
 
         <div className="col-span-2">
-          {/* Area charts skipped per request */}
-          <div className="card" style={{padding:24}}>
-            <div style={{fontSize:16,color:'var(--fg)'}}>Historical charts are disabled for now</div>
-          </div>
+          <ChartAreaInteractive title="Soil Moisture and Water Levels in Time" />
         </div>
 
         <div className="col-span-2">
-          <div className="card" style={{padding:24}}>
-            <div style={{fontSize:16,color:'var(--fg)'}}>Historical charts are disabled for now</div>
-          </div>
+          <ChartTempHum title="Temperature and Humidity in Time" />
         </div>
       </div>
   )

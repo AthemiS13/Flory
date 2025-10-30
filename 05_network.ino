@@ -406,6 +406,22 @@ void startWebRoutes() {
     sdTruncateLogFile();
   sendCors(200, "application/json", "{\"ok\":true}");
   });
+  // Serve log file as plain text for charts
+  server.on("/log/log.txt", HTTP_GET, []() {
+    Serial.println("[HTTP] GET /log/log.txt received");
+    if (!SD.exists("/log/log.txt")) {
+      sendCors(404, "text/plain", "Log file not found");
+      return;
+    }
+    File file = SD.open("/log/log.txt");
+    if (!file) {
+      sendCors(500, "text/plain", "Failed to open log file");
+      return;
+    }
+    setCorsHeaders();
+    server.streamFile(file, "text/plain");
+    file.close();
+  });
   server.on("/api/pump", HTTP_POST, handlePumpPost);
   server.on("/api/restart", HTTP_POST, handleRestart);
   server.onNotFound([]() {

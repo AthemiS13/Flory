@@ -49,7 +49,6 @@ function prepareChartData(entries: LogEntry[], range: Range) {
     const d = parseDate(e.timestamp)
     let label = e.timestamp
     if (d) {
-      // Format as "Mon 12:00" or "Oct 1 12:00"
       const month = d.toLocaleDateString('en-US', { month: 'short' })
       const day = d.getDate()
       const hour = d.getHours().toString().padStart(2, '0')
@@ -62,15 +61,15 @@ function prepareChartData(entries: LogEntry[], range: Range) {
     }
     return {
       date: label,
-      soil: Math.round(e.soilPercent * 10) / 10,
-      water: Math.round(e.waterPercent * 10) / 10,
+      temp: Math.round(e.temp * 10) / 10,
+      hum: Math.round(e.hum * 10) / 10,
     }
   })
 }
 
-export default function AreaInner({ title = 'Soil Moisture and Water Levels in Time' }: { title?: string }) {
+export default function TempHumInner({ title = 'Temperature and Humidity in Time' }: { title?: string }) {
   const [range, setRange] = React.useState<Range>('7d')
-  const [chartData, setChartData] = React.useState<{ date: string; soil: number; water: number }[]>([])
+  const [chartData, setChartData] = React.useState<{ date: string; temp: number; hum: number }[]>([])
   const [loading, setLoading] = React.useState(true)
 
   React.useEffect(() => {
@@ -82,7 +81,7 @@ export default function AreaInner({ title = 'Soil Moisture and Water Levels in T
         const data = prepareChartData(logs, range)
         setChartData(data)
       } catch (err) {
-        console.warn('Failed to load logs for area chart', err)
+        console.warn('Failed to load logs for temp/hum chart', err)
       } finally {
         if (mounted) setLoading(false)
       }
@@ -120,13 +119,13 @@ export default function AreaInner({ title = 'Soil Moisture and Water Levels in T
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={chartData} margin={{ left: 10, right: 10, top: 10, bottom: 20 }}>
               <defs>
-                <linearGradient id="g1" x1="0" x2="0" y1="0" y2="1">
-                  <stop offset="0%" stopColor="var(--graph-1)" stopOpacity={0.9} />
-                  <stop offset="100%" stopColor="var(--graph-1)" stopOpacity={0.05} />
+                <linearGradient id="g3" x1="0" x2="0" y1="0" y2="1">
+                  <stop offset="0%" stopColor="var(--graph-3)" stopOpacity={0.9} />
+                  <stop offset="100%" stopColor="var(--graph-3)" stopOpacity={0.05} />
                 </linearGradient>
-                <linearGradient id="g2" x1="0" x2="0" y1="0" y2="1">
-                  <stop offset="0%" stopColor="var(--graph-2)" stopOpacity={0.9} />
-                  <stop offset="100%" stopColor="var(--graph-2)" stopOpacity={0.05} />
+                <linearGradient id="g4" x1="0" x2="0" y1="0" y2="1">
+                  <stop offset="0%" stopColor="var(--graph-4)" stopOpacity={0.9} />
+                  <stop offset="100%" stopColor="var(--graph-4)" stopOpacity={0.05} />
                 </linearGradient>
               </defs>
               <CartesianGrid vertical={false} strokeOpacity={0.06} />
@@ -140,16 +139,19 @@ export default function AreaInner({ title = 'Soil Moisture and Water Levels in T
               <Tooltip
                 contentStyle={{ background: 'var(--card)', border: '1px solid var(--card-stroke)' }}
                 itemStyle={{ color: 'var(--fg)' }}
-                formatter={(value: number, name: string) => [`${value}%`, name === 'soil' ? 'Soil Moisture' : 'Water Level']}
+                formatter={(value: number, name: string) => [
+                  name === 'temp' ? `${value}°C` : `${value}%`,
+                  name === 'temp' ? 'Temperature' : 'Humidity'
+                ]}
               />
               <Legend
                 verticalAlign="bottom"
                 align="left"
                 wrapperStyle={{ bottom: -6, left: 8 }}
-                formatter={(value) => (value === 'soil' ? 'Soil Moisture' : 'Water Level')}
+                formatter={(value) => (value === 'temp' ? 'Temperature' : 'Humidity')}
               />
-              <Area dataKey="soil" stroke="var(--graph-1)" fill="url(#g1)" type="natural" />
-              <Area dataKey="water" stroke="var(--graph-2)" fill="url(#g2)" type="natural" />
+              <Area dataKey="temp" stroke="var(--graph-3)" fill="url(#g3)" type="natural" />
+              <Area dataKey="hum" stroke="var(--graph-4)" fill="url(#g4)" type="natural" />
             </AreaChart>
           </ResponsiveContainer>
         )}
@@ -157,4 +159,3 @@ export default function AreaInner({ title = 'Soil Moisture and Water Levels in T
     </div>
   )
 }
-

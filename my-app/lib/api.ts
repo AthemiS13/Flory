@@ -110,6 +110,51 @@ export async function postRestart(): Promise<{ ok: boolean }> {
   })
 }
 
+export type LogEntry = {
+  timestamp: string // "YYYY-MM-DD HH:MM:SS" or "ms:<millis>"
+  soilPercent: number
+  waterPercent: number
+  temp: number
+  hum: number
+  pumpOn: boolean
+  timeSynced: boolean
+}
+
+export async function getLogs(): Promise<LogEntry[]> {
+  const base = getBaseUrl()
+  const url = `${base}/log/log.txt`
+  try { console.debug('[api] fetch logs:', url) } catch(e) {}
+  const res = await fetch(url)
+  if (!res.ok) throw new Error(`Log fetch failed: ${res.status}`)
+  const text = await res.text()
+  
+  // Parse CSV: skip header, parse lines
+  const lines = text.split('\n').filter(l => l.trim())
+  const entries: LogEntry[] = []
+  
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim()
+    if (!line) continue
+    // Skip header row (first line or any line starting with "timestamp")
+    if (line.startsWith('timestamp,')) continue
+    
+    const parts = line.split(',')
+    if (parts.length < 7) continue // need all 7 fields
+    
+    entries.push({
+      timestamp: parts[0],
+      soilPercent: parseFloat(parts[1]) || 0,
+      waterPercent: parseFloat(parts[2]) || 0,
+      temp: parseFloat(parts[3]) || 0,
+      hum: parseFloat(parts[4]) || 0,
+      pumpOn: parts[5] === '1',
+      timeSynced: parts[6] === '1',
+    })
+  }
+  
+  return entries
+}
+
 export default {
   getStatus,
   getSettings,
@@ -118,5 +163,6 @@ export default {
   postCalibration,
   postPump,
   postRestart,
+  getLogs,
   setDeviceBaseUrl,
 }

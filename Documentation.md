@@ -116,6 +116,16 @@ POST /api/logs/rollover
 - Response: 200 {"ok":true}
 - Use to test truncation without waiting for month change.
 
+GET /log/log.txt
+- Purpose: Download the current log file as plain text for chart visualization.
+- Method: GET
+- Response: 200 text/plain (raw CSV content) or 404 if file doesn't exist
+- Notes: 
+  - Streams the file directly from SD card with CORS headers enabled
+  - Used by webapp charts to fetch historical data
+  - Returns the entire log file (can be large - consider pagination for production)
+  - File location: `/log/log.txt` on SD card
+
 GET /sd/list
 - Purpose: List files on SD (path optional via query `?path=/log`).
 - Method: GET
@@ -328,6 +338,72 @@ Upload a file (example using curl multipart)
 curl -X POST -F "file=@app/index.html" http://DEVICE_IP/sd/upload
 ```
 (Note: the device expects streaming upload via `HTTPUpload` callbacks. The uploader on the webapp should use standard multipart upload; the firmware will stream the file to SD.)
+
+---
+
+## Webapp Chart Integration
+
+The dashboard includes three interactive charts that fetch data from `/log/log.txt` on the ESP SD card.
+
+### Chart Components
+
+**1. Pump ON Bar Chart** (`_BarInner.tsx`)
+- Shows pump activation count per day
+- Time ranges: Last 7 days, Last 30 days, All time
+- Groups log entries by date and counts `pumpOn=1` entries
+- Displays bars with hover tooltips (e.g., "5 times")
+
+**2. Soil Moisture & Water Levels Area Chart** (`_AreaInner.tsx`)
+- Displays soil moisture and water level percentages over time
+- Time ranges: Last 24 hours, Last 7 days, Last 30 days, All time
+- Two area series: soil (graph-1 color) and water (graph-2 color)
+- Downsampled to ~50 points for performance
+
+**3. Temperature & Humidity Area Chart** (`_TempHumInner.tsx`)
+- Displays temperature (°C) and humidity (%) over time
+- Time ranges: Last 24 hours, Last 7 days, Last 30 days, All time
+- Two area series: temp (graph-3 color) and humidity (graph-4 color)
+- Downsampled to ~50 points for performance
+
+### Data Flow
+1. Charts fetch `/log/log.txt` via `api.getLogs()` in `lib/api.ts`
+2. CSV is parsed client-side (skips header, parses 7 fields per line)
+3. Entries with `timeSynced=false` ("ms:..." timestamps) are filtered out for chronological accuracy
+4. Data is downsampled and formatted for recharts library
+5. Range dropdowns filter/process data without re-fetching
+
+### Log Entry Format (TypeScript)
+```typescript
+type LogEntry = {
+  timestamp: string       // "YYYY-MM-DD HH:MM:SS" or "ms:<millis>"
+  soilPercent: number
+  waterPercent: number
+  temp: number
+  hum: number
+  pumpOn: boolean
+  timeSynced: boolean
+}
+```
+
+### Testing Charts with Fake Data
+Use the log generator script to create test data:
+```bash
+# Generate month of hourly data (safe, small file ~744 lines)
+python3 scripts/generate_fake_logs.py --month 2025-10 --interval-seconds 3600 --outfile log/log.txt
+
+# Generate month of 60-second data (large file ~43k lines, requires --force)
+python3 scripts/generate_fake_logs.py --month 2025-10 --interval-seconds 60 --outfile log/log.txt --force
+```
+Then upload `log/log.txt` to ESP SD card under `/log/log.txt`.
+
+### Webapp Files Modified for Chart Integration
+- `lib/api.ts` — Added `getLogs()` method and `LogEntry` type
+- `components/charts/_BarInner.tsx` — Pump activation count chart
+- `components/charts/_AreaInner.tsx` — Soil/water area chart
+- `components/charts/_TempHumInner.tsx` — Temp/humidity area chart (new)
+- `components/charts/ChartTempHum.client.tsx` — Client wrapper (new)
+- `app/page.tsx` — Restored all three charts on dashboard
+- `app/globals.css` — Added `--graph-3` and `--graph-4` CSS variables
 
 ---
 
