@@ -343,63 +343,50 @@ bool handleFileRead() {
     gzipOk = enc.indexOf("gzip") >= 0;
   }
 
-  // Build the file path directly from /app/out
-  String filePath;
-  if (path == "/") {
-    filePath = "/app/out/index.html";
-  } else {
-    filePath = String("/app/out") + path;
-  }
+  // Support both "/app/out" and legacy "/app" roots to be resilient to uploader differences
+  const char* roots[2] = { "/app/out", "/app" };
+  String filePath;          // logical (uncompressed) file path used for content type
+  String servePath;         // actual file to stream (may be compressed)
+  String contentEncoding = ""; // br | gzip | ""
 
-  // Check for compressed versions: prefer br, then gz, then original
-  String servePath;
-  String contentEncoding = "";
-  String brPath = filePath + ".br";
-  String gzPath = filePath + ".gz";
-
-  // Helper lambda to check and select compressed/original file
+  // Helper lambda to check and select compressed/original file for a candidate
   auto chooseFile = [&](const String &candidate) -> bool {
     String b = candidate + ".br";
     String g = candidate + ".gz";
-    // Prefer the raw (uncompressed) candidate when present. Only fall back
-    // to precompressed variants if the original is missing.
-    if (SD.exists(candidate.c_str())) {
-      servePath = candidate;
-      contentEncoding = "";
-      return true;
-    }
-    if (brOk && SD.exists(b.c_str())) {
-      servePath = b;
-      contentEncoding = "br";
-      return true;
-    }
-    if (gzipOk && SD.exists(g.c_str())) {
-      servePath = g;
-      contentEncoding = "gzip";
-      return true;
-    }
+    if (SD.exists(candidate.c_str())) { servePath = candidate; contentEncoding = ""; return true; }
+    if (brOk && SD.exists(b.c_str())) { servePath = b; contentEncoding = "br"; return true; }
+    if (gzipOk && SD.exists(g.c_str())) { servePath = g; contentEncoding = "gzip"; return true; }
     return false;
   };
 
-  // Try the exact path first
-  if (!chooseFile(filePath)) {
-    // Try common alternatives for clean URLs: append .html
-    String htmlPath = filePath + ".html";
-    if (!chooseFile(htmlPath)) {
-      // Try as directory index: /foo -> /foo/index.html
-      String idxPath = filePath;
+  bool found = false;
+  // Try each root in order
+  for (int i = 0; i < 2 && !found; i++) {
+    String base = roots[i];
+    if (path == "/") {
+      // Try index.html under this base
+      String candidate = base + String("/index.html");
+      if (chooseFile(candidate)) { filePath = candidate; found = true; break; }
+    } else {
+      // 1) exact path
+      String candidate = base + path;
+      if (chooseFile(candidate)) { filePath = candidate; found = true; break; }
+      // 2) clean URL with .html
+      String htmlPath = candidate + ".html";
+      if (chooseFile(htmlPath)) { filePath = htmlPath; found = true; break; }
+      // 3) directory index
+      String idxPath = candidate;
       if (!idxPath.endsWith("/")) idxPath += "/";
       idxPath += "index.html";
-      if (!chooseFile(idxPath)) {
-        Serial.printf("File not found: %s\n", filePath.c_str());
-        return false;
-      } else {
-        // ensure contentType is detected from the real served file path
-        filePath = idxPath;
-      }
-    } else {
-      filePath = htmlPath;
+      if (chooseFile(idxPath)) { filePath = idxPath; found = true; break; }
     }
+  }
+
+  if (!found) {
+    // Log the primary miss for debugging
+    String primary = (path == "/") ? String("/app/out/index.html") : (String("/app/out") + path);
+    Serial.printf("File not found under any base. Primary miss: %s\n", primary.c_str());
+    return false;
   }
 
   File file = SD.open(servePath.c_str());
