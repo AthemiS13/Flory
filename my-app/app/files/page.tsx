@@ -8,18 +8,19 @@ type HistoryItem = string
 export default function FilesPage() {
   const [cwd, setCwd] = useState<string>('/')
   const [busy, setBusy] = useState(false)
-  const [input, setInput] = useState('')
   const [history, setHistory] = useState<HistoryItem[]>([])
   const [histIdx, setHistIdx] = useState<number>(-1)
   const [error, setError] = useState<string | null>(null)
+  const [currentLine, setCurrentLine] = useState<string>('')
+  const [caretVisible, setCaretVisible] = useState<boolean>(true)
   const outRef = useRef<HTMLPreElement | null>(null)
-  const inputRef = useRef<HTMLInputElement | null>(null)
+  const hiddenInputRef = useRef<HTMLInputElement | null>(null)
 
-  // Initial CWD
+  // Initial CWD: align server to root and focus input
   useEffect(() => {
     (async () => {
-      try { const { cwd } = await api.sdPwd(); setCwd(cwd) } catch {}
-      try { inputRef.current?.focus() } catch {}
+      try { const res = await api.sdCd('/'); setCwd(res.cwd) } catch { setCwd('/') }
+      try { hiddenInputRef.current?.focus() } catch {}
     })()
   }, [])
 
@@ -31,6 +32,12 @@ export default function FilesPage() {
   }, [history])
 
   const prompt = useMemo(() => `${cwd} $`, [cwd])
+
+  // Blink caret
+  useEffect(() => {
+    const id = setInterval(() => setCaretVisible(v => !v), 500)
+    return () => clearInterval(id)
+  }, [])
 
   const append = useCallback((line: string | string[]) => {
     setHistory(prev => prev.concat(Array.isArray(line) ? line : [line]))
@@ -55,12 +62,6 @@ export default function FilesPage() {
           setHistory([])
           break
         }
-        case 'pwd': {
-          const { cwd } = await api.sdPwd()
-          setCwd(cwd)
-          append(cwd)
-          break
-        }
         case 'ls': {
           const path = args[0]
           const list = await api.sdList(path)
@@ -75,34 +76,11 @@ export default function FilesPage() {
           setCwd(res.cwd)
           break
         }
-        case 'cat':
-        case 'open': {
-          if (!args[0]) throw new Error('usage: cat <path> [--max N]')
-          const { path, max } = parseCatArgs(args)
-          const res = await api.sdCat(path, max ? { max } : undefined)
-          const hdr = `--- ${path} (${formatBytes(res.size)}${res.truncated ? ', truncated' : ''}) ---`
-          append([hdr, res.body, '--- end ---'])
-          break
-        }
         case 'rm': {
           if (!args[0]) throw new Error('usage: rm [-r] <path>')
           const { recursive, path } = parseRmArgs(args)
           await api.sdRm(path, recursive)
           append('ok')
-          break
-        }
-        case 'mkdir': {
-          if (!args[0]) throw new Error('usage: mkdir <path>')
-          await api.sdMkdir(args[0])
-          append('ok')
-          break
-        }
-        case 'rollover': {
-          await api.logsRollover(); append('ok')
-          break
-        }
-        case 'wipe-app': {
-          await api.sdWipeApp(); append('ok')
           break
         }
         default: {
@@ -115,23 +93,28 @@ export default function FilesPage() {
       setError(msg)
     } finally {
       setBusy(false)
+      try { hiddenInputRef.current?.focus() } catch {}
     }
   }, [append, prompt])
 
+  // Keystroke handler via hidden input
   const onKey = useCallback((e: any) => {
+    if (!hiddenInputRef.current) return
     if (e.key === 'Enter') {
-      const v = input
-      setInput('')
-      if (v.trim()) setHistory(prev => prev.concat(``)) // spacer ensures prompt separation
+      if (busy) return
+      const v = currentLine
+      setCurrentLine('')
+      if (v.trim()) setHistory(prev => prev.concat(''))
       run(v)
-      // push into command history (skip duplicates)
-      setHistory(prev => prev)
+    } else if (e.key === 'Backspace') {
+      e.preventDefault()
+      if (currentLine.length > 0) setCurrentLine(currentLine.slice(0, -1))
     } else if (e.key === 'ArrowUp') {
       e.preventDefault()
       setHistIdx(i => {
         const newIdx = Math.min(history.length - 1, i < 0 ? history.length - 1 : i - 1)
         const prevCmd = findPrevCommand(history, newIdx)
-        if (prevCmd != null) setInput(prevCmd)
+        if (prevCmd != null) setCurrentLine(prevCmd)
         return newIdx
       })
     } else if (e.key === 'ArrowDown') {
@@ -139,11 +122,14 @@ export default function FilesPage() {
       setHistIdx(i => {
         const newIdx = i < 0 ? -1 : Math.min(history.length - 1, i + 1)
         const nextCmd = findNextCommand(history, newIdx)
-        setInput(nextCmd || '')
+        setCurrentLine(nextCmd || '')
         return newIdx
       })
+    } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      // Append printable character
+      setCurrentLine(currentLine + e.key)
     }
-  }, [history, input, run])
+  }, [busy, currentLine, history, run])
 
   const doRollover = useCallback(async () => {
     try { setBusy(true); await api.logsRollover(); append('rollover: ok') } catch (e: any) { append('error: ' + (e?.message || String(e))) } finally { setBusy(false) }
@@ -155,45 +141,35 @@ export default function FilesPage() {
   }, [append])
 
   return (
-    <div style={{ padding: 24 }}>
-      <h1 style={{ fontSize: 24, marginBottom: 12 }}>Files</h1>
-
-      {/* Only the two action buttons */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-        <button onClick={doRollover} disabled={busy} style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #2b355f', background: '#0f1733', color: '#e7eaf3' }}>Force month rollover</button>
-        <button onClick={doWipeApp} disabled={busy} style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #5a2b2b', background: '#361a1a', color: '#ffd7d7' }}>Wipe /app</button>
+    <div className="settings-page-container">
+      <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
+        <button onClick={doRollover} disabled={busy} className="ui-button">Force month rollover</button>
+        <button onClick={doWipeApp} disabled={busy} className="ui-button">Wipe /app</button>
       </div>
 
       {/* Terminal */}
-      <div style={{ border: '1px solid #2b355f', borderRadius: 8, overflow: 'hidden', background: '#0f1733' }}>
-        <pre ref={outRef} style={{ margin: 0, padding: 12, height: 380, overflow: 'auto', color: '#e7eaf3', whiteSpace: 'pre-wrap' }}>
+      <div className="card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 0 }} onClick={() => hiddenInputRef.current?.focus()}>
+        <pre ref={outRef} style={{ margin: 0, padding: 16, height: 460, overflow: 'auto', color: 'var(--fg)', whiteSpace: 'pre-wrap', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace' }}>
           {history.length === 0 && (
             <>
               <div>Type 'help' for available commands. Examples:</div>
               <div>  ls</div>
               <div>  cd app</div>
-              <div>  pwd</div>
-              <div>  cat out/index.html</div>
               <div>  rm -r old_folder</div>
-              <div>  mkdir new_folder</div>
             </>
           )}
           {history.map((line, idx) => (
             <div key={idx}>{line}</div>
           ))}
+          {/* Prompt line */}
+          <div>
+            <span style={{ color: 'var(--fg)' }}>{prompt} </span>
+            <span>{currentLine}</span>
+            <span style={{ opacity: caretVisible ? 1 : 0 }}>|</span>
+          </div>
         </pre>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '10px 12px', borderTop: '1px solid #2b355f', background: '#11193a' }}>
-          <div style={{ color: '#9fb0d6', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace' }}>{prompt}</div>
-          <input
-            ref={inputRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={onKey}
-            disabled={busy}
-            placeholder="Type a command and press Enter"
-            style={{ flex: 1, padding: '8px 10px', borderRadius: 6, border: '1px solid #2b355f', background: '#0f1733', color: '#e7eaf3' }}
-          />
-        </div>
+        {/* Hidden input to capture keystrokes, preserves mobile keyboards and IME */}
+        <input ref={hiddenInputRef} onKeyDown={onKey} autoCapitalize="none" autoCorrect="off" spellCheck={false} style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', width: 1, height: 1 }} />
       </div>
 
       {error && (
@@ -223,28 +199,10 @@ function helpText(): string[] {
     'Available commands:',
     '  help                 Show this help',
     '  clear                Clear the screen',
-    '  pwd                  Print working directory',
     '  ls [path]            List directory (defaults to CWD)',
     '  cd [path]            Change directory (.. supported)',
-    '  cat <path> [--max N] Show file contents (default max 16KB)',
-    '  open <path>          Alias for cat',
     '  rm [-r] <path>       Remove file or directory (use -r for dir)',
-    '  mkdir <path>         Create directory',
-    '  rollover             Force month rollover',
-    "  wipe-app             Wipe '/app'",
   ]
-}
-
-function parseCatArgs(args: string[]): { path: string; max?: number } {
-  let path = ''
-  let max: number | undefined
-  for (let i = 0; i < args.length; i++) {
-    const a = args[i]
-    if (a === '--max') { const v = parseInt(args[i+1], 10); if (!isNaN(v)) max = v; i++; continue }
-    if (!path) path = a
-  }
-  if (!max) max = 16384
-  return { path, max }
 }
 
 function parseRmArgs(args: string[]): { recursive: boolean; path: string } {

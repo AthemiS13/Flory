@@ -435,12 +435,6 @@ void handleSdList() {
   sendCors(200, "application/json", out);
 }
 
-void handleSdPwd() {
-  DynamicJsonDocument doc(128);
-  doc["cwd"] = getClientCwd();
-  String out; serializeJson(doc, out);
-  sendCors(200, "application/json", out);
-}
 
 void handleSdCd() {
   if (server.method() != HTTP_POST) { sendCors(405); return; }
@@ -465,46 +459,6 @@ void handleSdCd() {
   sendCors(200, "application/json", body);
 }
 
-void handleSdCat() {
-  String cwd = getClientCwd();
-  if (!server.hasArg("path")) { sendCors(400, "application/json", "{\"error\":\"missing path\"}"); return; }
-  String pathIn = server.arg("path");
-  String abs = normalizePath(cwd, pathIn);
-  File f = SD.open(abs.c_str());
-  if (!f || f.isDirectory()) { if (f) f.close(); sendCors(404, "application/json", "{\"error\":\"file not found\"}"); return; }
-  size_t fileSize = f.size();
-  size_t maxBytes = 16384; // 16KB default
-  if (server.hasArg("max")) {
-    long m = server.arg("max").toInt();
-    if (m > 0 && m <= 65536) maxBytes = (size_t)m;
-  }
-  size_t offset = 0;
-  if (server.hasArg("offset")) {
-    long o = server.arg("offset").toInt();
-    if (o > 0) offset = (size_t)o;
-  }
-  if (offset > fileSize) offset = fileSize;
-  f.seek(offset);
-  String out; out.reserve((unsigned)maxBytes + 64);
-  const size_t bufSize = 512;
-  uint8_t buf[bufSize];
-  size_t remaining = maxBytes;
-  while (remaining > 0 && f.available()) {
-    size_t toRead = remaining < bufSize ? remaining : bufSize;
-    int r = f.read(buf, toRead);
-    if (r <= 0) break;
-    for (int i = 0; i < r; i++) out += (char)buf[i];
-    remaining -= (size_t)r;
-  }
-  bool truncated = (offset + out.length()) < fileSize;
-  f.close();
-  setCorsHeaders();
-  server.sendHeader("Content-Type", "text/plain");
-  server.sendHeader("X-File-Size", String((unsigned long)fileSize));
-  server.sendHeader("X-Offset", String((unsigned long)offset));
-  server.sendHeader("X-Truncated", truncated ? "1" : "0");
-  server.send(200, "text/plain", out);
-}
 
 void handleSdRm() {
   if (server.method() != HTTP_POST) { sendCors(405); return; }
@@ -531,26 +485,6 @@ void handleSdRm() {
   sendCors(200, "application/json", "{\"ok\":true}");
 }
 
-void handleSdMkdir() {
-  if (server.method() != HTTP_POST) { sendCors(405); return; }
-  if (!server.hasArg("plain")) { sendCors(400, "application/json", "{\"error\":\"no body\"}"); return; }
-  DynamicJsonDocument doc(256);
-  if (deserializeJson(doc, server.arg("plain"))) { sendCors(400, "application/json", "{\"error\":\"invalid json\"}"); return; }
-  if (!doc.containsKey("path")) { sendCors(400, "application/json", "{\"error\":\"missing path\"}"); return; }
-  String cwd = getClientCwd();
-  String p = normalizePath(cwd, String((const char*)doc["path"]))
-               ;
-  // Create intermediate directories
-  String accum = ""; int start = 1; // skip leading '/'
-  while (start < p.length()) {
-    int next = p.indexOf('/', start);
-    if (next < 0) next = p.length();
-    accum += "/" + p.substring(start, next);
-    if (!SD.exists(accum.c_str())) SD.mkdir(accum.c_str());
-    start = next + 1;
-  }
-  sendCors(200, "application/json", "{\"ok\":true}");
-}
 
 void startWebRoutes() {
   // Handle CORS preflight requests globally
@@ -605,11 +539,8 @@ void startWebRoutes() {
   sendCors(200, "application/json", out);
   });
   server.on("/sd/list", HTTP_GET, handleSdList);
-  server.on("/sd/pwd", HTTP_GET, handleSdPwd);
   server.on("/sd/cd", HTTP_POST, handleSdCd);
-  server.on("/sd/cat", HTTP_GET, handleSdCat);
   server.on("/sd/rm", HTTP_POST, handleSdRm);
-  server.on("/sd/mkdir", HTTP_POST, handleSdMkdir);
   server.on("/api/settings", HTTP_POST, handleSettingsPost);
   server.on("/api/logs/rollover", HTTP_POST, []() {
     // force truncate the main log file (useful for testing)
