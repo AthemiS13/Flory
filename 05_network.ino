@@ -2,6 +2,8 @@
 #include "globals.h"
 #include <ESPmDNS.h>
 #include <SD.h>
+#include <vector>
+#include <limits.h>
 
 // Simple CORS helper: sets minimal permissive headers for browser-based dev clients.
 void setCorsHeaders() {
@@ -19,6 +21,96 @@ void sendCors(int code) {
 void sendCors(int code, const char* contentType, const String& body) {
   setCorsHeaders();
   server.send(code, contentType, body);
+}
+
+// -------------------- SD path and CWD helpers --------------------
+
+// Maintain a tiny per-client CWD table keyed by client IP.
+// Default CWD is "/". Max a few clients to keep RAM footprint small.
+struct CwdEntry { IPAddress ip; String cwd; unsigned long last; bool used; };
+static CwdEntry g_cwdTable[6];
+
+static String normalizePath(const String& cwd, const String& input) {
+  // Build absolute path from cwd + input, resolving '.' and '..'
+  String base = input.startsWith("/") ? String("/") : (cwd.length() ? cwd : String("/"));
+  String combined;
+  if (input.startsWith("/")) {
+    combined = input;
+  } else {
+    // ensure base ends with '/'
+    combined = base;
+    if (!combined.endsWith("/")) combined += "/";
+    combined += input;
+  }
+  // Split and resolve
+  std::vector<String> parts;
+  int i = 0;
+  while (i < combined.length()) {
+    int j = combined.indexOf('/', i);
+    if (j < 0) j = combined.length();
+    String seg = combined.substring(i, j);
+    if (seg.length() > 0) {
+      if (seg == ".") {
+        // skip
+      } else if (seg == "..") {
+        if (!parts.empty()) parts.pop_back();
+      } else {
+        parts.push_back(seg);
+      }
+    }
+    i = j + 1;
+  }
+  String out = "/";
+  for (size_t k = 0; k < parts.size(); k++) {
+    out += parts[k];
+    if (k + 1 < parts.size()) out += "/";
+  }
+  if (out.length() == 0) out = "/";
+  return out;
+}
+
+static String getClientCwd() {
+  IPAddress ip = server.client() ? server.client().remoteIP() : IPAddress();
+  unsigned long now = millis();
+  int freeIdx = -1; unsigned long oldest = ULONG_MAX; int oldIdx = -1;
+  for (int k = 0; k < (int)(sizeof(g_cwdTable)/sizeof(g_cwdTable[0])); k++) {
+    if (g_cwdTable[k].used && g_cwdTable[k].ip == ip) {
+      g_cwdTable[k].last = now;
+      return g_cwdTable[k].cwd.length() ? g_cwdTable[k].cwd : String("/");
+    }
+    if (!g_cwdTable[k].used && freeIdx < 0) freeIdx = k;
+    if (g_cwdTable[k].used && g_cwdTable[k].last < oldest) { oldest = g_cwdTable[k].last; oldIdx = k; }
+  }
+  int idx = freeIdx >= 0 ? freeIdx : oldIdx;
+  if (idx >= 0) {
+    g_cwdTable[idx].used = true;
+    g_cwdTable[idx].ip = ip;
+    g_cwdTable[idx].cwd = "/";
+    g_cwdTable[idx].last = now;
+  }
+  return String("/");
+}
+
+static void setClientCwd(const String& path) {
+  IPAddress ip = server.client() ? server.client().remoteIP() : IPAddress();
+  unsigned long now = millis();
+  int freeIdx = -1; unsigned long oldest = ULONG_MAX; int oldIdx = -1;
+  for (int k = 0; k < (int)(sizeof(g_cwdTable)/sizeof(g_cwdTable[0])); k++) {
+    if (g_cwdTable[k].used && g_cwdTable[k].ip == ip) {
+      g_cwdTable[k].cwd = path;
+      g_cwdTable[k].last = now;
+      return;
+    }
+    if (!g_cwdTable[k].used && freeIdx < 0) freeIdx = k;
+    if (g_cwdTable[k].used && g_cwdTable[k].last < oldest) { oldest = g_cwdTable[k].last; oldIdx = k; }
+  }
+  int idx = freeIdx >= 0 ? freeIdx : oldIdx;
+  if (idx >= 0) {
+    g_cwdTable[idx].used = true;
+    g_cwdTable[idx].ip = ip;
+    g_cwdTable[idx].cwd = path;
+    g_cwdTable[idx].last = now;
+  }
 }
 
 
@@ -315,12 +407,8 @@ bool handleFileRead() {
 
 // Debug: list SD root contents as JSON
 void handleSdList() {
-  String path = "/";
-  if (server.hasArg("path")) {
-    path = server.arg("path");
-    // ensure leading slash
-    if (!path.startsWith("/")) path = String("/") + path;
-  }
+  String path = server.hasArg("path") ? server.arg("path") : getClientCwd();
+  if (!path.startsWith("/")) path = String("/") + path;
   DynamicJsonDocument doc(4096);
   JsonArray arr = doc.to<JsonArray>();
   File dir = SD.open(path.c_str());
@@ -345,6 +433,123 @@ void handleSdList() {
   String out;
   serializeJson(doc, out);
   sendCors(200, "application/json", out);
+}
+
+void handleSdPwd() {
+  DynamicJsonDocument doc(128);
+  doc["cwd"] = getClientCwd();
+  String out; serializeJson(doc, out);
+  sendCors(200, "application/json", out);
+}
+
+void handleSdCd() {
+  if (server.method() != HTTP_POST) { sendCors(405); return; }
+  if (!server.hasArg("plain")) { sendCors(400, "application/json", "{\"error\":\"no body\"}"); return; }
+  DynamicJsonDocument doc(256);
+  if (deserializeJson(doc, server.arg("plain"))) { sendCors(400, "application/json", "{\"error\":\"invalid json\"}"); return; }
+  if (!doc.containsKey("path")) { sendCors(400, "application/json", "{\"error\":\"missing path\"}"); return; }
+  String cwd = getClientCwd();
+  String dest = normalizePath(cwd, String((const char*)doc["path"]))
+                  ;
+  File f = SD.open(dest.c_str());
+  if (!f || !f.isDirectory()) {
+    if (f) f.close();
+    sendCors(404, "application/json", "{\"error\":\"directory not found\"}");
+    return;
+  }
+  f.close();
+  setClientCwd(dest);
+  DynamicJsonDocument out(128);
+  out["cwd"] = dest;
+  String body; serializeJson(out, body);
+  sendCors(200, "application/json", body);
+}
+
+void handleSdCat() {
+  String cwd = getClientCwd();
+  if (!server.hasArg("path")) { sendCors(400, "application/json", "{\"error\":\"missing path\"}"); return; }
+  String pathIn = server.arg("path");
+  String abs = normalizePath(cwd, pathIn);
+  File f = SD.open(abs.c_str());
+  if (!f || f.isDirectory()) { if (f) f.close(); sendCors(404, "application/json", "{\"error\":\"file not found\"}"); return; }
+  size_t fileSize = f.size();
+  size_t maxBytes = 16384; // 16KB default
+  if (server.hasArg("max")) {
+    long m = server.arg("max").toInt();
+    if (m > 0 && m <= 65536) maxBytes = (size_t)m;
+  }
+  size_t offset = 0;
+  if (server.hasArg("offset")) {
+    long o = server.arg("offset").toInt();
+    if (o > 0) offset = (size_t)o;
+  }
+  if (offset > fileSize) offset = fileSize;
+  f.seek(offset);
+  String out; out.reserve((unsigned)maxBytes + 64);
+  const size_t bufSize = 512;
+  uint8_t buf[bufSize];
+  size_t remaining = maxBytes;
+  while (remaining > 0 && f.available()) {
+    size_t toRead = remaining < bufSize ? remaining : bufSize;
+    int r = f.read(buf, toRead);
+    if (r <= 0) break;
+    for (int i = 0; i < r; i++) out += (char)buf[i];
+    remaining -= (size_t)r;
+  }
+  bool truncated = (offset + out.length()) < fileSize;
+  f.close();
+  setCorsHeaders();
+  server.sendHeader("Content-Type", "text/plain");
+  server.sendHeader("X-File-Size", String((unsigned long)fileSize));
+  server.sendHeader("X-Offset", String((unsigned long)offset));
+  server.sendHeader("X-Truncated", truncated ? "1" : "0");
+  server.send(200, "text/plain", out);
+}
+
+void handleSdRm() {
+  if (server.method() != HTTP_POST) { sendCors(405); return; }
+  if (!server.hasArg("plain")) { sendCors(400, "application/json", "{\"error\":\"no body\"}"); return; }
+  DynamicJsonDocument doc(256);
+  if (deserializeJson(doc, server.arg("plain"))) { sendCors(400, "application/json", "{\"error\":\"invalid json\"}"); return; }
+  if (!doc.containsKey("path")) { sendCors(400, "application/json", "{\"error\":\"missing path\"}"); return; }
+  bool recursive = doc.containsKey("recursive") ? doc["recursive"].as<bool>() : false;
+  String cwd = getClientCwd();
+  String p = normalizePath(cwd, String((const char*)doc["path"]))
+               ;
+  File f = SD.open(p.c_str());
+  if (!f) { sendCors(404, "application/json", "{\"error\":\"not found\"}"); return; }
+  bool isDir = f.isDirectory(); f.close();
+  bool ok = false;
+  if (isDir) {
+    if (!recursive) { sendCors(400, "application/json", "{\"error\":\"is directory; pass recursive\"}"); return; }
+    sdWipeDirContents(p.c_str());
+    ok = SD.rmdir(p.c_str());
+  } else {
+    ok = SD.remove(p.c_str());
+  }
+  if (!ok) { sendCors(500, "application/json", "{\"error\":\"remove failed\"}"); return; }
+  sendCors(200, "application/json", "{\"ok\":true}");
+}
+
+void handleSdMkdir() {
+  if (server.method() != HTTP_POST) { sendCors(405); return; }
+  if (!server.hasArg("plain")) { sendCors(400, "application/json", "{\"error\":\"no body\"}"); return; }
+  DynamicJsonDocument doc(256);
+  if (deserializeJson(doc, server.arg("plain"))) { sendCors(400, "application/json", "{\"error\":\"invalid json\"}"); return; }
+  if (!doc.containsKey("path")) { sendCors(400, "application/json", "{\"error\":\"missing path\"}"); return; }
+  String cwd = getClientCwd();
+  String p = normalizePath(cwd, String((const char*)doc["path"]))
+               ;
+  // Create intermediate directories
+  String accum = ""; int start = 1; // skip leading '/'
+  while (start < p.length()) {
+    int next = p.indexOf('/', start);
+    if (next < 0) next = p.length();
+    accum += "/" + p.substring(start, next);
+    if (!SD.exists(accum.c_str())) SD.mkdir(accum.c_str());
+    start = next + 1;
+  }
+  sendCors(200, "application/json", "{\"ok\":true}");
 }
 
 void startWebRoutes() {
@@ -400,6 +605,11 @@ void startWebRoutes() {
   sendCors(200, "application/json", out);
   });
   server.on("/sd/list", HTTP_GET, handleSdList);
+  server.on("/sd/pwd", HTTP_GET, handleSdPwd);
+  server.on("/sd/cd", HTTP_POST, handleSdCd);
+  server.on("/sd/cat", HTTP_GET, handleSdCat);
+  server.on("/sd/rm", HTTP_POST, handleSdRm);
+  server.on("/sd/mkdir", HTTP_POST, handleSdMkdir);
   server.on("/api/settings", HTTP_POST, handleSettingsPost);
   server.on("/api/logs/rollover", HTTP_POST, []() {
     // force truncate the main log file (useful for testing)

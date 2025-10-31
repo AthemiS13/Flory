@@ -126,19 +126,51 @@ GET /log/log.txt
   - Returns the entire log file (can be large - consider pagination for production)
   - File location: `/log/log.txt` on SD card
 
+SD File Manager (bash-like)
+
 GET /sd/list
-- Purpose: List files on SD (path optional via query `?path=/log`).
+- Purpose: List files on SD. If `?path=` is omitted, lists the caller's current working directory (CWD).
 - Method: GET
-- Response: JSON array of file metadata (name, isDir, size).
-- Use: discover `/log/log.txt` and static files in `/app` or `/out`.
+- Query params: `path` (optional, absolute or relative to CWD)
+- Response: JSON array of file metadata (name, isDir, size)
+- Notes: Defaults to your CWD so it behaves like `ls`.
+
+GET /sd/pwd
+- Purpose: Print the caller's current working directory (per-client CWD tracked by client IP)
+- Method: GET
+- Response: {"cwd":"/current/path"}
+
+POST /sd/cd
+- Purpose: Change directory
+- Method: POST, Content-Type: application/json
+- Body: {"path":".."} or {"path":"/log"} (absolute or relative)
+- Response: {"cwd":"/new/path"}
+
+GET /sd/cat
+- Purpose: Read a slice of a file as text/plain
+- Method: GET
+- Query: `path` (required), `offset` (optional), `max` (optional, default 16384, up to 65536)
+- Response: 200 text/plain with headers: X-File-Size, X-Offset, X-Truncated
+
+POST /sd/rm
+- Purpose: Remove a file or directory
+- Method: POST, Content-Type: application/json
+- Body: {"path":"...", "recursive":true|false}
+- Response: {"ok":true} on success
+
+POST /sd/mkdir
+- Purpose: Create a directory path (creates intermediates)
+- Method: POST, Content-Type: application/json
+- Body: {"path":"/app/new/sub"}
+- Response: {"ok":true}
 
 POST /sd/upload
-- Purpose: Upload files to SD (emergency uploader).
-- Behavior: The server accepts file uploads in the standard Arduino `HTTPUpload` streaming callback. The handler:
-  - Normalizes filename to ensure it writes under `/app/`.
-  - The first incoming file triggers wiping `/app` contents (`sdWipeApp()`), then files are written streaming to SD.
+- Purpose: Upload files to SD (uploader uses this endpoint per-file)
+- Behavior: Streams each file to SD with chunked writes, periodic flushes and frequent yields to maintain responsiveness and avoid watchdog resets.
+- Path handling: Normalizes filename to write under `/app/` by default (leading slash optional). Uploader sends paths like `out/...` as the filename.
 - Integration notes:
-  - Use multipart/form-data upload in the webapp. The device will stream the content to SD; large uploads are supported stepwise.
+  - Use multipart/form-data with a field named `file`; set the filename to the desired relative path (e.g., `out/index.html`).
+  - Device sends HTTP 200 on success (basic ACK). For deeper verification we can extend JSON payload later with saved size/path.
 
 POST /sd/wipe?force=1
 - Purpose: Explicitly wipe `/app` (requires `force=1` to prevent accidental runs).
@@ -335,6 +367,35 @@ curl -X POST http://DEVICE_IP/api/logs/rollover
 List SD /log
 ```bash
 curl 'http://DEVICE_IP/sd/list?path=/log'
+```
+
+Check current directory
+```bash
+curl http://DEVICE_IP/sd/pwd
+```
+
+Change directory (like `cd ..`)
+```bash
+curl -X POST http://DEVICE_IP/sd/cd \
+  -H 'Content-Type: application/json' \
+  -d '{"path":".."}'
+```
+
+List current directory (like `ls`)
+```bash
+curl http://DEVICE_IP/sd/list
+```
+
+Show first 16KB of a file
+```bash
+curl 'http://DEVICE_IP/sd/cat?path=/log/log.txt&max=16384'
+```
+
+Remove a directory recursively
+```bash
+curl -X POST http://DEVICE_IP/sd/rm \
+  -H 'Content-Type: application/json' \
+  -d '{"path":"/app/_next","recursive":true}'
 ```
 
 Upload a file (example using curl multipart)

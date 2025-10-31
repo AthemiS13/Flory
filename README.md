@@ -40,6 +40,14 @@ All endpoints run on port 80. The README includes examples for common interactio
 - `POST /sd/upload` — multipart upload to `/app` (emergency uploader)
 - `POST /sd/wipe?force=1` — wipe `/app` (dangerous; requires force=1)
 
+SD file manager (bash-like):
+- `GET /sd/pwd` — current working directory for your client (tracked by IP)
+- `POST /sd/cd` — change directory, body: {"path":".."} or {"path":"/log"}
+- `GET /sd/list` — list contents of the current directory (CWD) when `path` is omitted
+- `GET /sd/cat?path=...&offset=0&max=16384` — view a slice of a file as text/plain (headers expose size/offset/truncated)
+- `POST /sd/rm` — remove file or directory; body: {"path":"...","recursive":true}
+- `POST /sd/mkdir` — create directory path (creates intermediates)
+
 See `API.md` or the full `README` in the repo for details and JSON examples.
 
 ---
@@ -50,6 +58,26 @@ CSV format per line: `timestamp,soilPercent,waterPercent,temp,hum,pumpOn,timeSyn
 The firmware writes a CSV header row to `/log/log.txt` when the file is created or truncated, so parsers can rely on column order.
 Device truncates `log.txt` at month rollover (and provides `POST /api/logs/rollover` to test truncation immediately)
 Logs persist across device restarts and power cycles; the firmware will not delete or rotate existing log files on boot. Truncation happens only on month rollover (when time is known) or when `/api/logs/rollover` is called.
+
+---
+
+## Uploader app (folder-based)
+
+There is a separate Next.js uploader at `uploader-app/` for pushing the exported web UI (`out/` folder) to the device.
+
+Highlights:
+- Drag-and-drop the `out/` folder or select it; no ZIP required
+- Uploads files sequentially to `/sd/upload`, waits for per-file 200 (basic ACK)
+- Automatically disables SD logging during upload (reduces SD contention), wipes `/app`, uploads, restores logging, and restarts device
+- Device URL is fixed to `http://flory.local`
+
+Run it:
+```bash
+cd uploader-app
+npm install
+npm run dev
+```
+Then open the printed URL and drop your `out/` folder.
 
 ---
 

@@ -178,3 +178,65 @@ export default {
   getLogs,
   setDeviceBaseUrl,
 }
+
+// ---------------- SD File Manager API ----------------
+
+export type SdEntry = { name: string; isDir: boolean; size?: number }
+
+export async function sdPwd(): Promise<{ cwd: string }> {
+  return fetchJson<{ cwd: string }>('/sd/pwd')
+}
+
+export async function sdCd(path: string): Promise<{ cwd: string }> {
+  return fetchJson<{ cwd: string }>('/sd/cd', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path })
+  })
+}
+
+export async function sdList(path?: string): Promise<SdEntry[]> {
+  const p = path ? `?path=${encodeURIComponent(path)}` : ''
+  return fetchJson<SdEntry[]>(`/sd/list${p}`)
+}
+
+export type SdCatResult = { body: string; size: number; offset: number; truncated: boolean }
+
+export async function sdCat(path: string, opts?: { offset?: number; max?: number }): Promise<SdCatResult> {
+  const base = getBaseUrl()
+  const q: string[] = [`path=${encodeURIComponent(path)}`]
+  if (opts?.offset != null) q.push(`offset=${opts.offset}`)
+  if (opts?.max != null) q.push(`max=${opts.max}`)
+  const url = `${base}/sd/cat?${q.join('&')}`
+  const res = await fetch(url)
+  if (!res.ok) throw new Error(`sdCat failed: ${res.status}`)
+  const body = await res.text()
+  const size = parseInt(res.headers.get('X-File-Size') || '0', 10) || 0
+  const offset = parseInt(res.headers.get('X-Offset') || '0', 10) || 0
+  const truncated = (res.headers.get('X-Truncated') || '0') === '1'
+  return { body, size, offset, truncated }
+}
+
+export async function sdRm(path: string, recursive?: boolean): Promise<{ ok: boolean }> {
+  return fetchJson<{ ok: boolean }>(`/sd/rm`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path, recursive: !!recursive })
+  })
+}
+
+export async function sdMkdir(path: string): Promise<{ ok: boolean }> {
+  return fetchJson<{ ok: boolean }>(`/sd/mkdir`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path })
+  })
+}
+
+export async function sdWipeApp(): Promise<{ ok: boolean }> {
+  return fetchJson<{ ok: boolean }>(`/sd/wipe?force=1`, { method: 'POST' })
+}
+
+export async function logsRollover(): Promise<{ ok: boolean }> {
+  return fetchJson<{ ok: boolean }>(`/api/logs/rollover`, { method: 'POST' })
+}
