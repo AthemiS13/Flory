@@ -1,1 +1,9 @@
-COMPLETE
+## Tweaks and changes that have to be made to the Florys firmware and the web app
+
+1. Updated uplaoder of the apps build into the /app folder on the SD card. I need a reliable and robust soliution so i can upload the compressed /out folder directly into the /app folder wirelessly. Currently the firmware has basic upload capabilities but no verification system. i want the files to send one by one and each time the file is succesfully received the esp sends a response. it doesnt need to be complicated, just a basic verification system that the file was delivered and received. The app through which the files will be sent needs to be a separate new nextjs folder and project since running it in the existing app doesnt make any sense since the app will be wiped from the esps sd card in the porcess of upload. The uploader needs to handle errors, retry if possible and have timeouts and delays.
+
+
+2. File manager - A way to navigate through the SD cards directories. I want a standart bash navigation so cd, cd .., ls and a way to open files to display their contents and delete them. This change will need to be made into the florys firmware. 
+
+3. File page - use the firmware changes from step 2 above and implement them into the florys main hosted pap. and also to add buttons to force month turnover and to wipe the app folders content. This will all take place on the "files" page of the my-app project.
+
