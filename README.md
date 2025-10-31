@@ -41,12 +41,10 @@ All endpoints run on port 80. The README includes examples for common interactio
 - `POST /sd/wipe?force=1` — wipe `/app` (dangerous; requires force=1)
 
 SD file manager (bash-like):
-- `GET /sd/pwd` — current working directory for your client (tracked by IP)
 - `POST /sd/cd` — change directory, body: {"path":".."} or {"path":"/log"}
 - `GET /sd/list` — list contents of the current directory (CWD) when `path` is omitted
-- `GET /sd/cat?path=...&offset=0&max=16384` — view a slice of a file as text/plain (headers expose size/offset/truncated)
+- `GET /sd/open?path=...&offset=0&max=16384` — open a slice of a file as text/plain (headers expose size/offset/truncated)
 - `POST /sd/rm` — remove file or directory; body: {"path":"...","recursive":true}
-- `POST /sd/mkdir` — create directory path (creates intermediates)
 
 See `API.md` or the full `README` in the repo for details and JSON examples.
 
@@ -78,6 +76,20 @@ npm install
 npm run dev
 ```
 Then open the printed URL and drop your `out/` folder.
+
+---
+
+## Files page — Terminal UI
+
+The web app’s Files page provides a terminal-like interface for SD navigation using these commands:
+- `ls [path]` — list directory (defaults to your CWD)
+- `cd [path]` — change directory (`..` supported)
+- `open <path> [--max N]` — open file contents (first 16KB by default)
+- `rm [-r] <path>` — remove file or directory (use `-r` for directories)
+
+Two auxiliary buttons are available above the terminal:
+- Force month rollover (POST `/api/logs/rollover`)
+- Wipe `/app` (POST `/sd/wipe?force=1`)
 
 ---
 

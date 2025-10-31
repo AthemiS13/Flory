@@ -132,6 +132,47 @@ void handleStatus() {
   sendCors(200, "application/json", out);
 }
 
+void handleSdCat() {
+  String cwd = getClientCwd();
+  if (!server.hasArg("path")) { sendCors(400, "application/json", "{\"error\":\"missing path\"}"); return; }
+  String pathIn = server.arg("path");
+  String abs = normalizePath(cwd, pathIn);
+  File f = SD.open(abs.c_str());
+  if (!f || f.isDirectory()) { if (f) f.close(); sendCors(404, "application/json", "{\"error\":\"file not found\"}"); return; }
+  size_t fileSize = f.size();
+  size_t maxBytes = 16384; // 16KB default
+  if (server.hasArg("max")) {
+    long m = server.arg("max").toInt();
+    if (m > 0 && m <= 65536) maxBytes = (size_t)m;
+  }
+  size_t offset = 0;
+  if (server.hasArg("offset")) {
+    long o = server.arg("offset").toInt();
+    if (o > 0) offset = (size_t)o;
+  }
+  if (offset > fileSize) offset = fileSize;
+  f.seek(offset);
+  String out; out.reserve((unsigned)maxBytes + 64);
+  const size_t bufSize = 512;
+  uint8_t buf[bufSize];
+  size_t remaining = maxBytes;
+  while (remaining > 0 && f.available()) {
+    size_t toRead = remaining < bufSize ? remaining : bufSize;
+    int r = f.read(buf, toRead);
+    if (r <= 0) break;
+    for (int i = 0; i < r; i++) out += (char)buf[i];
+    remaining -= (size_t)r;
+    delay(0);
+  }
+  bool truncated = (offset + out.length()) < fileSize;
+  f.close();
+  setCorsHeaders();
+  server.sendHeader("Content-Type", "text/plain");
+  server.sendHeader("X-File-Size", String((unsigned long)fileSize));
+  server.sendHeader("X-Offset", String((unsigned long)offset));
+  server.sendHeader("X-Truncated", truncated ? "1" : "0");
+  server.send(200, "text/plain", out);
+}
 // calibration endpoint
 void handleCalibrationGet() {
   DynamicJsonDocument doc(1024);
@@ -540,6 +581,9 @@ void startWebRoutes() {
   });
   server.on("/sd/list", HTTP_GET, handleSdList);
   server.on("/sd/cd", HTTP_POST, handleSdCd);
+  // New alias: prefer "/sd/open" over legacy "/sd/cat"
+  server.on("/sd/open", HTTP_GET, handleSdCat);
+  server.on("/sd/cat", HTTP_GET, handleSdCat);
   server.on("/sd/rm", HTTP_POST, handleSdRm);
   server.on("/api/settings", HTTP_POST, handleSettingsPost);
   server.on("/api/logs/rollover", HTTP_POST, []() {

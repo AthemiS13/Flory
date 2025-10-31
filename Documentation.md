@@ -135,18 +135,13 @@ GET /sd/list
 - Response: JSON array of file metadata (name, isDir, size)
 - Notes: Defaults to your CWD so it behaves like `ls`.
 
-GET /sd/pwd
-- Purpose: Print the caller's current working directory (per-client CWD tracked by client IP)
-- Method: GET
-- Response: {"cwd":"/current/path"}
-
 POST /sd/cd
 - Purpose: Change directory
 - Method: POST, Content-Type: application/json
 - Body: {"path":".."} or {"path":"/log"} (absolute or relative)
 - Response: {"cwd":"/new/path"}
 
-GET /sd/cat
+GET /sd/open
 - Purpose: Read a slice of a file as text/plain
 - Method: GET
 - Query: `path` (required), `offset` (optional), `max` (optional, default 16384, up to 65536)
@@ -157,12 +152,6 @@ POST /sd/rm
 - Method: POST, Content-Type: application/json
 - Body: {"path":"...", "recursive":true|false}
 - Response: {"ok":true} on success
-
-POST /sd/mkdir
-- Purpose: Create a directory path (creates intermediates)
-- Method: POST, Content-Type: application/json
-- Body: {"path":"/app/new/sub"}
-- Response: {"ok":true}
 
 POST /sd/upload
 - Purpose: Upload files to SD (uploader uses this endpoint per-file)
@@ -369,11 +358,6 @@ List SD /log
 curl 'http://DEVICE_IP/sd/list?path=/log'
 ```
 
-Check current directory
-```bash
-curl http://DEVICE_IP/sd/pwd
-```
-
 Change directory (like `cd ..`)
 ```bash
 curl -X POST http://DEVICE_IP/sd/cd \
@@ -386,9 +370,9 @@ List current directory (like `ls`)
 curl http://DEVICE_IP/sd/list
 ```
 
-Show first 16KB of a file
+Open first 16KB of a file
 ```bash
-curl 'http://DEVICE_IP/sd/cat?path=/log/log.txt&max=16384'
+curl 'http://DEVICE_IP/sd/open?path=/log/log.txt&max=16384'
 ```
 
 Remove a directory recursively

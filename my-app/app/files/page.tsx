@@ -76,6 +76,14 @@ export default function FilesPage() {
           setCwd(res.cwd)
           break
         }
+        case 'open': {
+          if (!args[0]) throw new Error('usage: open <path> [--max N]')
+          const { path, max } = parseOpenArgs(args)
+          const res = await api.sdOpen(path, max ? { max } : undefined)
+          const hdr = `--- ${path} (${formatBytes(res.size)}${res.truncated ? ', truncated' : ''}) ---`
+          append([hdr, res.body, '--- end ---'])
+          break
+        }
         case 'rm': {
           if (!args[0]) throw new Error('usage: rm [-r] <path>')
           const { recursive, path } = parseRmArgs(args)
@@ -155,6 +163,7 @@ export default function FilesPage() {
               <div>Type 'help' for available commands. Examples:</div>
               <div>  ls</div>
               <div>  cd app</div>
+              <div>  open out/index.html</div>
               <div>  rm -r old_folder</div>
             </>
           )}
@@ -201,8 +210,21 @@ function helpText(): string[] {
     '  clear                Clear the screen',
     '  ls [path]            List directory (defaults to CWD)',
     '  cd [path]            Change directory (.. supported)',
+  '  open <path> [--max N] Open file contents (default max 16KB)',
     '  rm [-r] <path>       Remove file or directory (use -r for dir)',
   ]
+}
+
+function parseOpenArgs(args: string[]): { path: string; max?: number } {
+  let path = ''
+  let max: number | undefined
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i]
+    if (a === '--max') { const v = parseInt(args[i+1], 10); if (!isNaN(v)) max = v; i++; continue }
+    if (!path) path = a
+  }
+  if (!max) max = 16384
+  return { path, max }
 }
 
 function parseRmArgs(args: string[]): { recursive: boolean; path: string } {
@@ -216,9 +238,9 @@ function parseRmArgs(args: string[]): { recursive: boolean; path: string } {
 }
 
 function formatLs(it: api.SdEntry): string {
-  if (it.isDir) return `📁 ${it.name}/`
+  if (it.isDir) return `${it.name}/`
   const sz = typeof it.size === 'number' ? `  ${formatBytes(it.size)}` : ''
-  return `📄 ${it.name}${sz}`
+  return `${it.name}${sz}`
 }
 
 function formatBytes(n?: number) {

@@ -196,6 +196,23 @@ export async function sdList(path?: string): Promise<SdEntry[]> {
   return fetchJson<SdEntry[]>(`/sd/list${p}`)
 }
 
+export type SdOpenResult = { body: string; size: number; offset: number; truncated: boolean }
+
+export async function sdOpen(path: string, opts?: { offset?: number; max?: number }): Promise<SdOpenResult> {
+  const base = getBaseUrl()
+  const q: string[] = [`path=${encodeURIComponent(path)}`]
+  if (opts?.offset != null) q.push(`offset=${opts.offset}`)
+  if (opts?.max != null) q.push(`max=${opts.max}`)
+  const url = `${base}/sd/open?${q.join('&')}`
+  const res = await fetch(url)
+  if (!res.ok) throw new Error(`sdOpen failed: ${res.status}`)
+  const body = await res.text()
+  const size = parseInt(res.headers.get('X-File-Size') || '0', 10) || 0
+  const offset = parseInt(res.headers.get('X-Offset') || '0', 10) || 0
+  const truncated = (res.headers.get('X-Truncated') || '0') === '1'
+  return { body, size, offset, truncated }
+}
+
 export async function sdRm(path: string, recursive?: boolean): Promise<{ ok: boolean }> {
   return fetchJson<{ ok: boolean }>(`/sd/rm`, {
     method: 'POST',
