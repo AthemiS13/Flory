@@ -156,8 +156,26 @@ export default function FilesPage() {
       </div>
 
       {/* Terminal */}
-      <div className="card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 0 }} onClick={() => hiddenInputRef.current?.focus()}>
-        <pre ref={outRef} style={{ margin: 0, padding: 16, height: 460, overflow: 'auto', color: 'var(--fg)', whiteSpace: 'pre-wrap', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace' }}>
+      <div className="card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 0, width: '100%', maxWidth: '100%' }} onClick={() => hiddenInputRef.current?.focus()}>
+        <pre
+          ref={outRef}
+          style={{
+            margin: 0,
+            padding: 16,
+            height: 'min(60vh, 460px)',
+            overflowY: 'auto',
+            overflowX: 'auto',
+            color: 'var(--fg)',
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word',
+            overflowWrap: 'anywhere',
+            width: '100%',
+            maxWidth: '100%',
+            boxSizing: 'border-box',
+            fontFamily:
+              'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+          }}
+        >
           {history.length === 0 && (
             <>
               <div>Type 'help' for available commands. Examples:</div>
