@@ -8,6 +8,7 @@ A minimal Next.js app to upload your exported `out/` folder to the device SD car
 - Configurable delay between files and request timeouts
 - Optional wipe of `/app` before upload via `/sd/wipe?force=1`
 - Device URL is fixed to `http://flory.local`
+- Automatically wipes `/app` at start and restarts device after a successful full upload
 
 ## Quick start
 

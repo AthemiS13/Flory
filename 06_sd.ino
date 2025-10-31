@@ -5,6 +5,7 @@
 #include <SD.h>
 #include <SPI.h>
 #include <time.h>
+// (No direct task WDT resets; we yield frequently via delay() to keep watchdog satisfied.)
 
 // Chip select pin for SD card (D4 on many ESP32 boards)
 const int SD_CS_PIN = 4;
@@ -198,6 +199,8 @@ void sdWipeDirContents(const char *dirname) {
 void sdHandleUpload(HTTPUpload &upload) {
   static File currentUploadFile;
   static String currentUploadPath = "";
+  static size_t pendingFlushBytes = 0;
+  static size_t sinceLastYield = 0;
 
   String filename = upload.filename;
   if (filename.length() == 0) return; // nothing to do
@@ -215,6 +218,10 @@ void sdHandleUpload(HTTPUpload &upload) {
       currentUploadFile.close();
       currentUploadFile = File();
       currentUploadPath = "";
+    }
+    // Ensure a clean write: if file exists, remove it to avoid appending to old content
+    if (SD.exists(filename.c_str())) {
+      SD.remove(filename.c_str());
     }
     // ensure directories exist for the incoming file
     int lastSlash = filename.lastIndexOf('/');
@@ -238,6 +245,8 @@ void sdHandleUpload(HTTPUpload &upload) {
       Serial.printf("Failed to open %s for writing\n", filename.c_str());
     } else {
       currentUploadPath = filename;
+      pendingFlushBytes = 0;
+      sinceLastYield = 0;
     }
   } else if (upload.status == UPLOAD_FILE_WRITE) {
     if (!currentUploadFile) {
@@ -246,21 +255,52 @@ void sdHandleUpload(HTTPUpload &upload) {
       if (currentUploadFile) currentUploadPath = filename;
     }
     if (currentUploadFile) {
-      size_t written = currentUploadFile.write(upload.buf, upload.currentSize);
-      if (written != upload.currentSize) {
-        Serial.printf("Warning: wrote %u of %u bytes to %s\n", (unsigned)written, (unsigned)upload.currentSize, filename.c_str());
+      // Write in smaller chunks and yield to keep WDT happy
+      const uint8_t* p = upload.buf;
+      size_t remaining = upload.currentSize;
+      while (remaining > 0) {
+        size_t chunk = remaining > 1024 ? 1024 : remaining;
+        size_t w = currentUploadFile.write(p, chunk);
+        if (w != chunk) {
+          Serial.printf("Warning: wrote %u of %u bytes to %s (partial)\n", (unsigned)w, (unsigned)chunk, filename.c_str());
+        }
+        pendingFlushBytes += w;
+        sinceLastYield += w;
+        p += chunk;
+        remaining -= chunk;
+
+        // Periodic flush every 32KB to avoid long blocking flushes
+        if (pendingFlushBytes >= 32 * 1024) {
+          #if defined(ARDUINO_ARCH_ESP32)
+          currentUploadFile.flush();
+          #endif
+          pendingFlushBytes = 0;
+        }
+        // Yield periodically to allow WiFi/HTTP and idle tasks to run (feeds WDT)
+        if (sinceLastYield >= 4 * 1024) {
+          delay(1); // brief yield (~1ms)
+          sinceLastYield = 0;
+        } else {
+          delay(0);
+        }
       }
-      // Yield to the RTOS / WiFi stack to avoid watchdog
-      delay(0);
     } else {
       Serial.printf("Failed to append to %s\n", filename.c_str());
     }
   } else if (upload.status == UPLOAD_FILE_END) {
     // close file if it matches
     if (currentUploadFile) {
+      // Final flush to persist remaining bytes
+      #if defined(ARDUINO_ARCH_ESP32)
+      if (pendingFlushBytes > 0) {
+        currentUploadFile.flush();
+      }
+      #endif
       currentUploadFile.close();
       currentUploadFile = File();
       currentUploadPath = "";
+      pendingFlushBytes = 0;
+      sinceLastYield = 0;
     }
     Serial.printf("Upload complete: %s (%u bytes)\n", filename.c_str(), upload.totalSize);
   }

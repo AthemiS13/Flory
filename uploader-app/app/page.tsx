@@ -9,8 +9,12 @@ function bytes(n: number) {
   return `${n.toFixed(i === 0 ? 0 : 1)} ${u[i]}`
 }
 
+const TIMEOUT_MS = 120000 // 2 minutes to accommodate slow SD writes for large files
+const RETRIES = 5
+const DELAY_BETWEEN_MS = 200
+
 async function fetchWithTimeout(url: string, opts: RequestInit & { timeoutMs?: number }) {
-  const { timeoutMs = 15000, ...rest } = opts
+  const { timeoutMs = TIMEOUT_MS, ...rest } = opts
   const ctrl = new AbortController()
   const id = setTimeout(() => ctrl.abort(), timeoutMs)
   try {
@@ -38,11 +42,6 @@ export default function Page() {
   const [uploading, setUploading] = useState(false)
   const [progress, setProgress] = useState({ done: 0, total: 0, bytes: 0 })
   const [logs, setLogs] = useState<string[]>([])
-  const [delayMs, setDelayMs] = useState(200)
-  const [retries, setRetries] = useState(3)
-  const [timeoutMs, setTimeoutMs] = useState(15000)
-  const [wipeFirst, setWipeFirst] = useState(true)
-  const [ensureOutBase, setEnsureOutBase] = useState(true)
   const stopRef = useRef(false)
 
   const addLog = useCallback((line: string) => {
@@ -130,7 +129,7 @@ export default function Page() {
     // Normalize paths
     list = list.map(e => ({ ...e, path: e.path.replace(/^\.\//, '') }))
     // If nothing starts with out/, prefix it when enabled
-    const needsOutPrefix = ensureOutBase && list.every(e => !e.path.startsWith('out/'))
+    const needsOutPrefix = list.every(e => !e.path.startsWith('out/'))
     if (needsOutPrefix) list = list.map(e => ({ ...e, path: `out/${e.path}` }))
     // Sort
     list.sort((a, b) => a.path.localeCompare(b.path))
@@ -154,32 +153,51 @@ export default function Page() {
 
     try {
       const base = DEVICE_BASE
-      if (wipeFirst) {
-        addLog('Wiping /app on device...')
-        const res = await fetchWithTimeout(`${base}/sd/wipe?force=1`, { method: 'POST', timeoutMs })
-        if (!res.ok) throw new Error(`Wipe failed: ${res.status}`)
-        addLog('Wipe OK')
-        await new Promise(r => setTimeout(r, 500))
+      // Temporarily disable SD logging (to avoid SD contention)
+      let originalLoggingInterval: number | undefined
+      try {
+        const cur = await fetchWithTimeout(`${base}/api/settings`, { method: 'GET' })
+        if (cur.ok) {
+          const json = await cur.json()
+          originalLoggingInterval = typeof json?.loggingIntervalMs === 'number' ? json.loggingIntervalMs : undefined
+        }
+      } catch {}
+      if (originalLoggingInterval !== undefined && originalLoggingInterval !== 0) {
+        try {
+          await fetchWithTimeout(`${base}/api/settings`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ loggingIntervalMs: 0 }),
+          })
+          addLog('Temporarily disabled SD logging')
+        } catch {}
       }
+
+      // Always wipe first
+      addLog('Wiping /app on device...')
+      const resWipe = await fetchWithTimeout(`${base}/sd/wipe?force=1`, { method: 'POST' })
+      if (!resWipe.ok) throw new Error(`Wipe failed: ${resWipe.status}`)
+      addLog('Wipe OK')
+      await new Promise(r => setTimeout(r, 500))
 
       let done = 0
       let sentBytes = 0
       for (const e of entries) {
         if (stopRef.current) throw new Error('Stopped by user')
         const url = `${base}/sd/upload`
-        const form = new FormData()
-        form.append('file', e.file, e.path)
 
         let attempt = 0
         let last: UploadResult | null = null
-        const max = Math.max(1, retries)
+        const max = Math.max(1, RETRIES)
         while (attempt < max) {
           attempt++
           try {
+            const form = new FormData()
+            form.append('file', e.file, e.path)
             const res = await fetchWithTimeout(url, {
               method: 'POST',
               body: form,
-              timeoutMs,
+              timeoutMs: TIMEOUT_MS,
             })
             const text = await res.text()
             if (!res.ok) throw new Error(`HTTP ${res.status} ${text}`)
@@ -200,16 +218,31 @@ export default function Page() {
         done += 1
         setProgress({ done, total: entries.length, bytes: sentBytes })
         addLog(`✔ ${e.path} (${bytes(e.size)})`)
-        if (delayMs > 0) await new Promise(r => setTimeout(r, delayMs))
+        if (DELAY_BETWEEN_MS > 0) await new Promise(r => setTimeout(r, DELAY_BETWEEN_MS))
       }
 
       addLog('All files uploaded successfully')
+      // Restore logging interval if we changed it
+      if (originalLoggingInterval !== undefined && originalLoggingInterval !== 0) {
+        try {
+          await fetchWithTimeout(`${base}/api/settings`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ loggingIntervalMs: originalLoggingInterval }),
+          })
+          addLog('Restored SD logging interval')
+        } catch {}
+      }
+      // Auto-restart device after full upload
+      addLog('Restarting device...')
+      await fetchWithTimeout(`${base}/api/restart`, { method: 'POST' })
+      addLog('Restart requested. Device will reboot.')
     } catch (err: any) {
       addLog(`Upload aborted: ${err?.message || String(err)}`)
     } finally {
       setUploading(false)
     }
-  }, [entries, wipeFirst, retries, timeoutMs, delayMs, addLog])
+  }, [entries, addLog])
 
   const pct = useMemo(() => {
     if (!entries || entries.length === 0) return 0
@@ -218,38 +251,26 @@ export default function Page() {
 
   return (
     <div onDragOver={(e) => e.preventDefault()} onDrop={handleDrop}>
-      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center', marginBottom: 16 }}>
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            <input type="checkbox" checked={wipeFirst} onChange={e => setWipeFirst(e.target.checked)} />
-            Wipe /app first
-          </label>
-          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            <input type="checkbox" checked={ensureOutBase} onChange={e => setEnsureOutBase(e.target.checked)} />
-            Ensure paths prefixed with out/
-          </label>
-        </div>
-      </div>
-
-      <div style={{ display: 'flex', gap: 16, alignItems: 'center', marginBottom: 16, flexWrap: 'wrap' }}>
-        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, border: '1px dashed #2b355f', padding: '10px 12px', borderRadius: 8, cursor: 'pointer', background: '#0f1733' }}>
-          {/* @ts-ignore - non-standard */}
-          <input type="file" webkitdirectory="" multiple onChange={handleInputFolder} style={{ display: 'none' }} />
-          <span>Select out folder</span>
-        </label>
-        <span style={{ opacity: 0.8 }}>or drag & drop the out folder here</span>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 12 }}>
-          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            Delay
-            <input type="number" min={0} step={50} value={delayMs} onChange={e => setDelayMs(parseInt(e.target.value || '0', 10))} style={{ width: 90, padding: '6px 8px', borderRadius: 6, border: '1px solid #263056', background: '#0f1733', color: 'inherit' }} /> ms
-          </label>
-          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            Retries
-            <input type="number" min={1} max={10} value={retries} onChange={e => setRetries(parseInt(e.target.value || '1', 10))} style={{ width: 80, padding: '6px 8px', borderRadius: 6, border: '1px solid #263056', background: '#0f1733', color: 'inherit' }} />
-          </label>
-          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            Timeout
-            <input type="number" min={1000} step={1000} value={timeoutMs} onChange={e => setTimeoutMs(parseInt(e.target.value || '15000', 10))} style={{ width: 110, padding: '6px 8px', borderRadius: 6, border: '1px solid #263056', background: '#0f1733', color: 'inherit' }} /> ms
+      {/* Shadcn-style dropzone */}
+      <div style={{ marginBottom: 16 }}>
+        <div style={{
+          border: '2px dashed #2b355f',
+          background: '#0f1733',
+          borderRadius: 12,
+          padding: 24,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 16
+        }}>
+          <div>
+            <div style={{ fontWeight: 600, marginBottom: 6 }}>Drop your out folder here</div>
+            <div style={{ opacity: 0.8, fontSize: 13 }}>The uploader will wipe /app, ensure paths start with out/, upload files sequentially, and restart the device.</div>
+          </div>
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, border: '1px solid #263056', padding: '10px 12px', borderRadius: 8, cursor: 'pointer', background: '#121b3d' }}>
+            {/* @ts-ignore - non-standard */}
+            <input type="file" webkitdirectory="" multiple onChange={handleInputFolder} style={{ display: 'none' }} />
+            <span>Select out folder</span>
           </label>
         </div>
       </div>
