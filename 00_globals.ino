@@ -91,3 +91,17 @@ inline bool timeNotExpired(unsigned long expiry) {
   // shorter than 2^31 ms (~24.8 days). This is the common Arduino idiom.
   return (long)(expiry - millis()) > 0;
 }
+
+// -------------------- Time sync tracking (NTP) --------------------
+// We keep the last known valid epoch and when it was observed so we can
+// provide an approximate local time if NTP is temporarily unavailable.
+bool timeEverSynced = false;           // set true after first successful getLocalTime
+time_t lastSyncedEpoch = 0;            // epoch seconds when we last had valid time
+unsigned long lastSyncedMillis = 0;    // millis() captured at the same moment
+// How long an approximate time is considered safe/valid for automation decisions
+// (24 hours default). If you prefer strict mode, set this to 0.
+unsigned long approxTimeValidMs = 24UL * 60UL * 60UL * 1000UL;
+
+// Minimal persisted rollover marker (YYYY/MM of last truncation)
+int lastRolloverYear = 0;
+int lastRolloverMonth = 0;

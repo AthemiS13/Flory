@@ -60,3 +60,14 @@ void loadCalibrationFromPrefs() {
     if (newmap.size() >= 2) waterMap = newmap;
   }
 }
+
+// Minimal rollover persistence to avoid repeated truncation on 1st after reboot
+void saveLastRollover(int year, int month) {
+  prefs.putInt("rollover_year", year);
+  prefs.putInt("rollover_month", month);
+}
+
+void loadLastRollover() {
+  lastRolloverYear = prefs.getInt("rollover_year", 0);
+  lastRolloverMonth = prefs.getInt("rollover_month", 0);
+}

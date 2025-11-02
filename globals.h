@@ -92,4 +92,21 @@ void pumpTask(void* pvParameters);
 void sensorTask(void* pvParameters);
 void networkTask(void* pvParameters);
 
+// Time sync tracking and safe time helper
+extern bool timeEverSynced;
+extern time_t lastSyncedEpoch;
+extern unsigned long lastSyncedMillis;
+extern unsigned long approxTimeValidMs;
+// Returns true if we can provide a time: exact NTP if available, otherwise
+// approximate within approxTimeValidMs of the last sync. If outExact is
+// provided, it is set to true when the time is exact (NTP) and false when
+// approximate.
+bool getLocalTimeSafe(struct tm* out, int timeoutMs, bool* outExact = nullptr);
+
+// Minimal rollover guard to avoid wiping logs multiple times on the 1st if rebooted
+extern int lastRolloverYear;
+extern int lastRolloverMonth;
+void saveLastRollover(int year, int month);
+void loadLastRollover();
+
 #endif // SMARTPOT_GLOBALS_H

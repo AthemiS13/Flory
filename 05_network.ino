@@ -4,6 +4,7 @@
 #include <SD.h>
 #include <vector>
 #include <limits.h>
+#include <time.h>
 
 // Simple CORS helper: sets minimal permissive headers for browser-based dev clients.
 void setCorsHeaders() {
@@ -644,13 +645,14 @@ void networkTask(void* parameter) {
   Serial.print("[WiFi] Connected! IP: ");
   Serial.println(WiFi.localIP());
 
-  // Configure timezone to Europe/Prague (CET/CEST) and start SNTP/NTP.
+  // Configure timezone to Europe/Prague (CET/CEST) and start SNTP/NTP first.
   // TZ string: CET-1CEST,M3.5.0/2,M10.5.0/3  -> follows POSIX TZ format
   const char* tz = "CET-1CEST,M3.5.0/2,M10.5.0/3";
   setenv("TZ", tz, 1);
   tzset();
+  configTzTime(tz, "pool.ntp.org", "time.nist.gov");
+  Serial.println("Starting NTP sync...");
   // Try to obtain NTP time for a short period so sensor task can rely on local time.
-  Serial.println("Starting NTP sync... checking local time availability...");
   struct tm timeinfo;
   bool timeOk = false;
   unsigned long startWait = millis();
@@ -658,6 +660,9 @@ void networkTask(void* parameter) {
   while (millis() - startWait < maxWait) {
     if (getLocalTime(&timeinfo, 2000)) {
       timeOk = true;
+      // record sync for fallback calculations
+      time_t nowEpoch = time(nullptr);
+      if (nowEpoch > 0) { lastSyncedEpoch = nowEpoch; lastSyncedMillis = millis(); timeEverSynced = true; }
       break;
     }
     Serial.println("NTP: local time not yet available, retrying...");
@@ -668,7 +673,6 @@ void networkTask(void* parameter) {
   } else {
     Serial.println("NTP: local time NOT available after wait; sensor task may skip auto-watering until time is available");
   }
-  configTzTime(tz, "pool.ntp.org", "time.nist.gov");
   Serial.println("NTP configured (Europe/Prague TZ)");
 
   // Initialize SD for static file serving (best effort)

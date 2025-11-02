@@ -95,7 +95,8 @@ void sensorTask(void* pvParameters) {
       // get local hour; require time to be available — do not trigger automated
       // operation if the device doesn't know the time (fail-closed)
       struct tm timeinfo;
-      bool haveTime = getLocalTime(&timeinfo, 2000); // wait up to 2s for time
+      bool exact = false;
+      bool haveTime = getLocalTimeSafe(&timeinfo, 1000, &exact); // allow approximate within window
       if (!haveTime) {
         // don't trigger auto-watering when time is unknown
         Serial.println("Auto-watering skipped: local time not available");
@@ -145,7 +146,8 @@ void sensorTask(void* pvParameters) {
       // prepare timestamp
       struct tm timeinfo;
       char timestr[32] = {0};
-      if (getLocalTime(&timeinfo, 1000)) {
+      bool exact = false;
+      if (getLocalTimeSafe(&timeinfo, 800, &exact)) {
         snprintf(timestr, sizeof(timestr), "%04d-%02d-%02d %02d:%02d:%02d", timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday, timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
       } else {
         snprintf(timestr, sizeof(timestr), "ms:%lu", nowMs);
@@ -157,23 +159,25 @@ void sensorTask(void* pvParameters) {
       int y = 0;
       int m = 0;
       bool timeSynced = false;
-      if (getLocalTime(&timeinfo, 1000)) {
+      exact = false;
+      if (getLocalTimeSafe(&timeinfo, 800, &exact)) {
         y = timeinfo.tm_year + 1900;
         m = timeinfo.tm_mon + 1;
-        timeSynced = true;
-      }
-
-      // If we have time, only truncate when the month actually changes.
-      // On first run after boot curLogYear/curLogMonth are zero: in that case
-      // initialize them without truncating so we don't wipe same-month logs on restart.
-      if (timeSynced) {
-        if (curLogYear == 0 && curLogMonth == 0) {
-          // first init after boot — remember current month but do not truncate
+        timeSynced = exact; // mark 1 only when exact NTP time is available
+        // Truncate exactly once per month on the 1st when we have exact time.
+        if (exact && timeinfo.tm_mday == 1) {
+          if (lastRolloverYear != y || lastRolloverMonth != m) {
+            Serial.printf("Month turnover (day=1): truncating /log/log.txt for %04d-%02d\n", y, m);
+            sdTruncateLogFile();
+            lastRolloverYear = y;
+            lastRolloverMonth = m;
+            saveLastRollover(y, m);
+          }
+          // update current month cache
           curLogYear = y;
           curLogMonth = m;
-        } else if (y != curLogYear || m != curLogMonth) {
-          Serial.printf("Month rollover detected: truncating /log/log.txt for new month %04d-%02d\n", y, m);
-          sdTruncateLogFile();
+        } else if (exact) {
+          // Track current month normally
           curLogYear = y;
           curLogMonth = m;
         }

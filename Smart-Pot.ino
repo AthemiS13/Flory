@@ -29,6 +29,7 @@ void setup() {
   // prefs
   prefs.begin(PREF_NAMESPACE, false);
   loadCalibrationFromPrefs();
+  loadLastRollover();
 
   // configure LEDC PWM for pump (MOSFET gate) using loaded prefs
   if (pumpPwmResolution < 1) pumpPwmResolution = 1;
