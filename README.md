@@ -114,3 +114,93 @@ If you want, I can:
 ---
 
 For full API details and integration examples see `API.md` (I can add it if you want).
+
+---
+
+## Hardware: SD card wiring
+
+The firmware uses the Arduino `SD` library in SPI mode with `SD_CS_PIN = 4`.
+
+Recommended wiring for an ESP32 DevKit (VSPI / default SPI pins):
+
+- `3V3` (ESP32)  -> `VCC` (SD module 3.3V)
+- `GND`         -> `GND`
+- `GPIO18`      -> `SCK` (CLK)
+- `GPIO23`      -> `MOSI` (DI)
+- `GPIO19`      -> `MISO` (DO)
+- `GPIO4`       -> `CS` (chip select)
+
+Notes:
+- Use 3.3V power for the SD card/module. Supplying 5V to a plain micro-SD socket can damage it.
+- Many SD breakout boards include a 3.3V regulator and level shifters. If yours does not, wire only 3.3V signals or add level shifting.
+- Keep wiring short and solid. If the SD module exposes `CD`/`CARD_DETECT` or `WP`, you can leave them disconnected unless you implement logic for them.
+
+How to test:
+1. Insert a micro-SD card and power the device.
+2. Open serial monitor at 115200 baud.
+3. On boot you should see either `SD initialized.` or `SD init failed!`.
+
+If you see `SD init failed!` verify VCC/GND, CS pin (GPIO4), and SPI wiring; try another card or shorter wires.
+
+---
+
+## Resetting / wiping saved Wi‑Fi credentials
+
+The device uses `WiFiManager` and the ESP32 WiFi stack (NVS) to store network credentials. There are two convenient ways to wipe the saved Wi‑Fi credentials so the device re-enters the setup AP (`Flory-Setup`) on next boot.
+
+1) Quick USB flash (recommended when you have physical access)
+
+Flash this small sketch (Arduino IDE / PlatformIO / arduino-cli). It erases Wi‑Fi data and restarts:
+
+```cpp
+#include <WiFi.h>
+#include <WiFiManager.h>
+
+void setup() {
+	Serial.begin(115200);
+	delay(500);
+	Serial.println("Wiping stored Wi-Fi credentials...");
+
+	WiFiManager wm;
+	wm.resetSettings();          // clears WiFiManager data in NVS
+
+	WiFi.disconnect(true, true); // erase WiFi credentials from WiFi stack
+
+	delay(500);
+	Serial.println("Done. Restarting...");
+	ESP.restart();
+}
+
+void loop() {}
+```
+
+After flashing and reboot the device will start the AP `Flory-Setup` (password `flory123`) so you can reconfigure Wi‑Fi.
+
+2) Remote wipe via HTTP endpoint (add to firmware)
+
+If you prefer to trigger a wipe remotely, add an authenticated endpoint to the firmware that calls `WiFiManager::resetSettings()` and `WiFi.disconnect(true,true)` and then restarts. Example handler to register in `startWebRoutes()` or where routes are created:
+
+```cpp
+server.on("/wifi/reset", HTTP_POST, []() {
+	Serial.println("[HTTP] POST /wifi/reset received - wiping Wi-Fi settings");
+	WiFiManager wm;
+	wm.resetSettings();
+	WiFi.disconnect(true, true);
+	sendCors(200, "application/json", "{\"ok\":true, \"restarting\":true}");
+	delay(200);
+	ESP.restart();
+});
+```
+
+Important: protect this endpoint (e.g., require a token or restrict to local network) before exposing it on untrusted networks.
+
+---
+
+## AP credentials (factory/setup)
+
+If no Wi‑Fi is configured, the device runs a setup AP:
+
+- SSID: `Flory-Setup`
+- Password: `flory123`
+
+You can change those values by modifying the `wifiManager.autoConnect("Flory-Setup", "flory123")` call in `05_network.ino` and reflashing.
