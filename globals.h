@@ -38,6 +38,9 @@ extern uint8_t deadzoneEndHour;
 // logging interval (ms) used for SD activity logging (defaults to 60000)
 extern unsigned long loggingIntervalMs;
 
+// Auto-reboot interval (8 hours)
+#define REBOOT_INTERVAL_MS (8 * 60 * 60 * 1000)
+
 extern SemaphoreHandle_t stateMutex;
 extern volatile bool pumpState;
 extern unsigned long pumpManualUntil;

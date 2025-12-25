@@ -61,6 +61,12 @@ void setup() {
 }
 
 void loop() {
+  // Auto-reboot check
+  if (millis() > REBOOT_INTERVAL_MS) {
+    Serial.println("Scheduled auto-reboot triggered.");
+    delay(1000); // Allow serial to flush
+    ESP.restart();
+  }
   vTaskDelay(pdMS_TO_TICKS(1000));
 }
 
