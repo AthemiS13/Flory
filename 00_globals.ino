@@ -54,6 +54,9 @@ unsigned long autoWaterCooldownUntil = 0;
 volatile unsigned long pumpActivationCountSinceLog = 0;
 volatile unsigned long pumpOnMsSinceLog = 0;
 
+// Track last pump trigger for priming logic
+unsigned long lastPumpTriggerTime = 0;
+
 // Pump task
 TaskHandle_t pumpTaskHandle = NULL;
 int lastAppliedDuty = -1;

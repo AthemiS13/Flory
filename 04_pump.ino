@@ -2,7 +2,13 @@
 void pumpOn() {
   // start pump for default duration (set timeout)
   LOCK_STATE();
-  pumpManualUntil = millis() + (unsigned long)pumpDurationMs;
+  unsigned long duration = (unsigned long)pumpDurationMs;
+  // if pump wasnt triggered within the last 120 minutes (7200000 ms), add 4s (4000 ms)
+  if ((millis() - lastPumpTriggerTime) > 7200000UL) {
+      duration += 4000UL;
+  }
+  pumpManualUntil = millis() + duration;
+  lastPumpTriggerTime = millis();
   UNLOCK_STATE();
 }
 
@@ -16,9 +22,15 @@ void pumpOff() {
 
 void startPumpMs(int ms) {
   LOCK_STATE();
-  unsigned long until = millis() + (unsigned long)ms;
+  unsigned long duration = (unsigned long)ms;
+  // if pump wasnt triggered within the last 120 minutes (7200000 ms), add 4s (4000 ms)
+  if ((millis() - lastPumpTriggerTime) > 7200000UL) {
+      duration += 4000UL;
+  }
+  unsigned long until = millis() + duration;
   // set the manual timeout directly (do not stack durations)
   pumpManualUntil = until;
+  lastPumpTriggerTime = millis();
   UNLOCK_STATE();
 }
 

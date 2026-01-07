@@ -51,6 +51,8 @@ extern unsigned long pumpAutoUntil;
 extern volatile unsigned long pumpActivationCountSinceLog;
 extern volatile unsigned long pumpOnMsSinceLog;
 
+extern unsigned long lastPumpTriggerTime;
+
 extern TaskHandle_t pumpTaskHandle;
 extern TaskHandle_t sensorTaskHandle;
 extern TaskHandle_t networkTaskHandle;

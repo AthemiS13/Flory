@@ -130,7 +130,13 @@ void sensorTask(void* pvParameters) {
           // start auto pump
           unsigned long now = millis();
           LOCK_STATE();
-          pumpAutoUntil = now + (unsigned long)pumpDurationMs;
+          unsigned long duration = (unsigned long)pumpDurationMs;
+          // if pump wasnt triggered within the last 120 minutes (7200000 ms), add 4s (4000 ms)
+          if ((now - lastPumpTriggerTime) > 7200000UL) {
+              duration += 4000UL;
+          }
+          pumpAutoUntil = now + duration;
+          lastPumpTriggerTime = now;
           // set cooldown to 60s after the pump stops
           autoWaterCooldownUntil = pumpAutoUntil + 60000UL; // 60000 ms = 1 minute
           UNLOCK_STATE();
